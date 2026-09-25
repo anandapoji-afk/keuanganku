@@ -193,17 +193,48 @@ export function TopBar() {
   const [namaAkunBaru, setNamaAkunBaru] = useState('');
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then((res: { data?: { user?: { email?: string } | null } }) => {
+      const email = res?.data?.user?.email;
+      if (email) {
+        setUserEmail(email);
+        setIsDemoMode(false);
+      } else {
+        setIsDemoMode(true);
+      }
+    });
+  }, []);
 
   async function keluar() {
-    document.cookie = 'keuanganku_auth=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     const supabase = createClient();
     try {
       await supabase.auth.signOut();
     } catch {
       // ignore
     }
-    router.push('/login');
-    router.refresh();
+    try {
+      localStorage.removeItem('keuanganku_auth');
+      localStorage.removeItem('keuanganku_demo');
+      localStorage.setItem('keuanganku_logged_out', '1');
+    } catch {
+      // ignore
+    }
+    // Hapus semua cookie sesi dan demo
+    document.cookie = 'keuanganku_auth=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+    document.cookie = 'keuanganku_demo=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+    if (typeof document !== 'undefined') {
+      document.cookie.split(';').forEach((c) => {
+        const name = c.split('=')[0].trim();
+        if (name.startsWith('sb-') || name.startsWith('supabase')) {
+          document.cookie = `${name}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure`;
+        }
+      });
+    }
+    window.location.replace('/login');
   }
 
   function onSelectWorkspace(v: string) {
@@ -251,7 +282,25 @@ export function TopBar() {
               KeuanganKu
               <Sparkles size={12} className="text-amber-500 opacity-80" />
             </div>
-            <div className="text-[10px] text-slate-400 font-medium -mt-0.5 hidden sm:block">Kelola Keuangan Cerdas</div>
+            <div className="text-[10px] text-slate-400 font-medium -mt-0.5 hidden sm:flex items-center gap-1.5">
+              <span>Kelola Keuangan</span>
+              <span>·</span>
+              {!isDemoMode && userEmail ? (
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  {userEmail}
+                </span>
+              ) : (
+                <Link
+                  href="/login"
+                  className="text-amber-700 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 font-semibold transition flex items-center gap-1"
+                  title="Klik untuk menghubungkan database Supabase Anda"
+                >
+                  <span>Mode Sample</span>
+                  <span className="text-sky-600 underline font-normal">Login</span>
+                </Link>
+              )}
+            </div>
           </div>
         </Link>
 

@@ -11,6 +11,11 @@ export function createClient() {
     return createMockSupabaseClient() as any;
   }
 
-  return createBrowserClient(url, key);
+  return createBrowserClient(url, key, {
+    cookieOptions: {
+      sameSite: 'none',
+      secure: true,
+      path: '/',
+    },
+  });
 }
-

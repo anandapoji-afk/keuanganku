@@ -190,14 +190,25 @@ export default function AnggaranPage() {
               const over = limit !== null && terpakai > limit;
               const persen = limit ? Math.min((terpakai / limit) * 100, 100) : 0;
               return (
-                <button
+                <div
                   key={kategori}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => bukaFilterKartu({ kategori, tipe: 'Pengeluaran' })}
-                  className={`bg-white rounded-xl border border-slate-200 border-l-4 ${warna.border} p-3.5 text-left`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      bukaFilterKartu({ kategori, tipe: 'Pengeluaran' });
+                    }
+                  }}
+                  className={`bg-white rounded-xl border border-slate-200 border-l-4 ${warna.border} p-3.5 text-left cursor-pointer transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20`}
                 >
                   <div className="flex items-start justify-between gap-1">
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${warna.chip}`}>{kategori}</span>
-                    <button onClick={(e) => { e.stopPropagation(); bukaSetAnggaran(kategori); }} className="text-[10px] text-slate-400 hover:text-sky-600 shrink-0 border border-slate-200 rounded px-1.5 py-0.5">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); bukaSetAnggaran(kategori); }}
+                      className="text-[10px] text-slate-400 hover:text-sky-600 shrink-0 border border-slate-200 rounded px-1.5 py-0.5 bg-white active:scale-95 transition"
+                    >
                       + Set
                     </button>
                   </div>
@@ -212,7 +223,7 @@ export default function AnggaranPage() {
                   ) : (
                     <div className="text-[10px] text-slate-400 italic mt-1">(Tidak ada limit)</div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

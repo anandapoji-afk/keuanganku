@@ -427,11 +427,12 @@ export default function TransaksiPage() {
                 {DAFTAR_WARNA_HIGHLIGHT.map((w) => (
                   <button
                     key={w.value}
+                    type="button"
                     onClick={() => ubahHighlight(t, w.value)}
                     className={`w-4 h-4 rounded-full border ${t.warna_highlight === w.value ? 'ring-2 ring-slate-400' : 'border-slate-300'}`}
                     style={{ background: w.hex || '#fff' }}
                     title={w.label}
-                  />
+                  ></button>
                 ))}
               </div>
 

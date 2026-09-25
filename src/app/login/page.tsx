@@ -1,143 +1,208 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { motion } from 'motion/react';
+import { Wallet, LogIn, UserPlus, Sparkles, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('ananda.poji@gmail.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk');
-  const [pesan, setPesan] = useState<string | null>(null);
+  const [pesan, setPesan] = useState<{ tipe: 'error' | 'sukses'; teks: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
-  useEffect(() => {
-    // Langsung arahkan ke dashboard utama
-    router.replace('/ringkasan');
-  }, [router]);
-
-  function setAuthCookie() {
-    document.cookie = 'keuanganku_auth=1; path=/; max-age=2592000; SameSite=Lax';
-  }
-
-  async function lakukanLogin(targetEmail: string, targetPass: string) {
-    setLoading(true);
-    setPesan(null);
-    const supabase = createClient();
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
-        password: targetPass,
-      });
-
-      if (error) {
-        // If Supabase authentication returned error (e.g. invalid credentials or network issue)
-        // Check if user is trying to use the test/demo credentials
-        if (targetEmail.includes('ananda.poji') || targetEmail.includes('demo') || targetEmail.includes('test')) {
-          setAuthCookie();
-          router.push('/');
-          router.refresh();
-          return;
-        }
-        setPesan('Error login: ' + error.message);
-      } else {
-        setAuthCookie();
-        router.push('/');
-        router.refresh();
-      }
-    } catch {
-      // Fallback for preview mode
-      setAuthCookie();
-      router.push('/');
-      router.refresh();
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // Masuk dengan email & password akun Supabase asli
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setLoading(true);
+    setPesan(null);
+
+    const supabase = createClient();
+
     if (mode === 'masuk') {
-      await lakukanLogin(email, password);
-    } else {
-      setLoading(true);
-      setPesan(null);
-      const supabase = createClient();
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setPesan('Error daftar: ' + error.message);
-      } else {
-        setAuthCookie();
-        setPesan('Akun berhasil dibuat! Silakan masuk.');
-        setMode('masuk');
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) {
+          setPesan({
+            tipe: 'error',
+            teks: error.message.includes('Invalid login')
+              ? 'Email atau password salah. Jika belum pernah mendaftar di database Supabase Anda, silakan pilih tab "Daftar Akun".'
+              : error.message,
+          });
+          setLoading(false);
+          return;
+        }
+
+        if (data?.session) {
+          try {
+            localStorage.setItem('keuanganku_auth', '1');
+            localStorage.removeItem('keuanganku_demo');
+          } catch {
+            // ignore
+          }
+
+          document.cookie = 'keuanganku_demo=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+          document.cookie = 'keuanganku_auth=1; path=/; max-age=2592000; SameSite=None; Secure';
+          
+          window.location.replace('/ringkasan');
+          return;
+        }
+      } catch (err: unknown) {
+        setPesan({
+          tipe: 'error',
+          teks: err instanceof Error ? err.message : 'Terjadi kesalahan saat masuk.',
+        });
+        setLoading(false);
       }
-      setLoading(false);
+    } else {
+      // Mode Daftar
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) {
+          setPesan({
+            tipe: 'error',
+            teks: 'Gagal mendaftar: ' + error.message,
+          });
+          setLoading(false);
+          return;
+        }
+
+        if (data?.session) {
+          try {
+            localStorage.setItem('keuanganku_auth', '1');
+            localStorage.removeItem('keuanganku_demo');
+          } catch {
+            // ignore
+          }
+
+          document.cookie = 'keuanganku_demo=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+          document.cookie = 'keuanganku_auth=1; path=/; max-age=2592000; SameSite=None; Secure';
+          
+          window.location.replace('/ringkasan');
+          return;
+        } else {
+          setPesan({
+            tipe: 'sukses',
+            teks: 'Pendaftaran berhasil dikirim! Silakan periksa inbox/spam email Anda untuk verifikasi jika konfirmasi email aktif di Supabase, lalu coba Masuk.',
+          });
+          setMode('masuk');
+          setLoading(false);
+        }
+      } catch (err: unknown) {
+        setPesan({
+          tipe: 'error',
+          teks: err instanceof Error ? err.message : 'Gagal membuat akun.',
+        });
+        setLoading(false);
+      }
     }
   }
 
-  async function masukSebagaiAkunTest() {
-    setEmail('ananda.poji@gmail.com');
-    setPassword('password123');
-    await lakukanLogin('ananda.poji@gmail.com', 'password123');
+  // Masuk menggunakan database demo / sample
+  function masukModeDemo() {
+    try {
+      localStorage.setItem('keuanganku_demo', '1');
+      localStorage.removeItem('keuanganku_auth');
+    } catch {
+      // ignore
+    }
+    document.cookie = 'keuanganku_demo=1; path=/; max-age=2592000; SameSite=None; Secure';
+    window.location.replace('/ringkasan');
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-2xl">💰</span>
-          <h1 className="text-xl font-bold text-slate-800">KeuanganKu</h1>
-        </div>
-        <p className="text-xs text-slate-500 mb-5">
-          {mode === 'masuk' ? 'Aplikasi Manajemen Keuangan Pribadi & Usaha' : 'Buat akun baru untuk mulai mencatat keuangan'}
-        </p>
-
-        {/* Kotak Akun Test Preview */}
-        <div className="mb-5 bg-sky-50/80 border border-sky-200 rounded-xl p-3.5 text-xs text-slate-700">
-          <div className="font-semibold text-sky-800 flex items-center gap-1.5 mb-1.5">
-            <span>⚡</span> Akun Test Siap Pakai (Preview)
+    <div className="min-h-screen flex items-center justify-center bg-slate-50/80 px-4 py-8">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-6 sm:p-7"
+      >
+        {/* Brand Header */}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
+            <Wallet size={20} strokeWidth={2.3} />
           </div>
-          <div className="space-y-1 text-[11px] text-slate-600 bg-white/70 p-2 rounded-lg border border-sky-100 mb-2.5">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Email:</span>
-              <code className="font-semibold text-sky-900 font-mono">ananda.poji@gmail.com</code>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Password:</span>
-              <code className="font-semibold text-sky-900 font-mono">password123</code>
-            </div>
-          </div>
-          <Link
-            href="/ringkasan"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-2.5 px-3 rounded-lg text-xs shadow-sm transition flex items-center justify-center gap-1.5 text-center"
-          >
-            <span>👉</span> Buka Dashboard Sekarang (Langsung Masuk)
-          </Link>
-        </div>
-
-        <div className="relative flex py-2 items-center mb-4">
-          <div className="flex-grow border-t border-slate-200"></div>
-          <span className="flex-shrink mx-2 text-[10px] text-slate-400 uppercase font-semibold">Atau Masuk Manual</span>
-          <div className="flex-grow border-t border-slate-200"></div>
-        </div>
-
-        <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="text-xs font-medium text-slate-600">Email</label>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-1.5">
+              KeuanganKu
+              <Sparkles size={14} className="text-amber-500" />
+            </h1>
+            <p className="text-[11px] text-slate-400 font-medium">Manajemen Keuangan Pribadi & Usaha</p>
+          </div>
+        </div>
+
+        {/* Tab Masuk / Daftar */}
+        <div className="flex bg-slate-100 p-1 rounded-xl my-5 border border-slate-200/60">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('masuk');
+              setPesan(null);
+            }}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              mode === 'masuk' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Masuk
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('daftar');
+              setPesan(null);
+            }}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              mode === 'daftar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Daftar Akun
+          </button>
+        </div>
+
+        {/* Notifikasi Pesan */}
+        {pesan && (
+          <div
+            className={`text-xs p-3 rounded-xl border mb-4 flex items-start gap-2 ${
+              pesan.tipe === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-700'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            }`}
+          >
+            {pesan.tipe === 'error' ? (
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+            )}
+            <div className="leading-relaxed">{pesan.teks}</div>
+          </div>
+        )}
+
+        {/* Form Login / Signup Supabase */}
+        <form onSubmit={submit} className="space-y-3.5">
+          <div>
+            <label className="text-xs font-semibold text-slate-700">Email Database Supabase</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="nama@email.com"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="mt-1 w-full rounded-xl border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 px-3.5 py-2 text-xs transition outline-none"
             />
           </div>
+
           <div>
-            <label className="text-xs font-medium text-slate-600">Password</label>
+            <label className="text-xs font-semibold text-slate-700">Password</label>
             <input
               type="password"
               required
@@ -145,42 +210,56 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Minimal 6 karakter"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="mt-1 w-full rounded-xl border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 px-3.5 py-2 text-xs transition outline-none"
             />
           </div>
 
-          {pesan && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 p-2.5 rounded-lg space-y-1">
-              <div>{pesan}</div>
-              <button
-                type="button"
-                onClick={masukSebagaiAkunTest}
-                className="text-[11px] text-sky-700 font-semibold underline block"
-              >
-                Gunakan Akun Test Preview
-              </button>
-            </div>
-          )}
-
-          <button
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-slate-800 text-white text-sm font-semibold py-2.5 hover:bg-slate-900 disabled:opacity-50 transition"
+            className="w-full mt-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold py-2.5 shadow-sm shadow-sky-600/20 disabled:opacity-50 transition flex items-center justify-center gap-1.5"
           >
-            {loading ? 'Memproses...' : mode === 'masuk' ? 'Masuk' : 'Daftar Akun'}
-          </button>
+            {loading ? (
+              <span>Memproses...</span>
+            ) : mode === 'masuk' ? (
+              <>
+                <LogIn size={15} strokeWidth={2.4} />
+                <span>Masuk ke Database Saya</span>
+              </>
+            ) : (
+              <>
+                <UserPlus size={15} strokeWidth={2.4} />
+                <span>Daftar Akun Baru</span>
+              </>
+            )}
+          </motion.button>
         </form>
 
-        <button
-          onClick={() => {
-            setMode(mode === 'masuk' ? 'daftar' : 'masuk');
-            setPesan(null);
-          }}
-          className="mt-4 text-xs text-sky-600 hover:underline w-full text-center"
-        >
-          {mode === 'masuk' ? 'Belum punya akun? Daftar akun baru' : 'Sudah punya akun? Masuk di sini'}
-        </button>
-      </div>
+        {/* Pemisah */}
+        <div className="relative flex py-4 items-center">
+          <div className="flex-grow border-t border-slate-200"></div>
+          <span className="flex-shrink mx-2 text-[10px] text-slate-400 uppercase font-semibold">atau coba</span>
+          <div className="flex-grow border-t border-slate-200"></div>
+        </div>
+
+        {/* Tombol Masuk Mode Demo */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-center">
+          <div className="text-xs font-semibold text-slate-700 mb-1">Preview / Uji Coba Cepat</div>
+          <p className="text-[11px] text-slate-400 mb-3">
+            Gunakan data sample tanpa perlu login ke akun database Supabase Anda.
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            type="button"
+            onClick={masukModeDemo}
+            className="w-full bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
+          >
+            <span>Masuk Mode Sample (Demo)</span>
+            <ArrowRight size={13} />
+          </motion.button>
+        </div>
+      </motion.div>
     </div>
   );
 }
