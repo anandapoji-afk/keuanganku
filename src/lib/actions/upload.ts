@@ -20,8 +20,17 @@ export async function uploadBuktiKeSupabaseStorage(
     const { supabase, user } = await requireUser();
 
     const ext = mimeType && mimeType.includes('png') ? '.png' : '.jpg';
-    const safeNama = (namaFile || `bukti_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `${user.id}/${encodeURIComponent(ws)}/${Date.now()}_${safeNama}${ext}`;
+
+    // Nama file: buang ekstensi asli dulu (agar tidak jadi .png.png), lalu
+    // sanitasi karakter yang tidak aman untuk key Supabase Storage.
+    const namaTanpaExt = (namaFile || `bukti_${Date.now()}`).replace(/\.[a-zA-Z0-9]+$/, '');
+    const safeNama = namaTanpaExt.replace(/[^a-zA-Z0-9._-]/g, '_') || `bukti_${Date.now()}`;
+
+    // PENTING: object key Supabase Storage adalah path literal, BUKAN URI —
+    // jangan encodeURIComponent di sini (karakter "%" tidak valid sebagai key).
+    // Cukup ganti karakter yang tidak aman (spasi, dll) dengan "_".
+    const safeWs = (ws || 'default').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${user.id}/${safeWs}/${Date.now()}_${safeNama}${ext}`;
 
     const bytes = Buffer.from(base64Data, 'base64');
 
