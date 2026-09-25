@@ -61,7 +61,7 @@ export async function tambahAkunWorkspace(namaBaru: string): Promise<ActionResul
       .select('id, nama')
       .eq('user_id', user.id);
 
-    if ((existing || []).some((w) => w.nama.toLowerCase() === nama.toLowerCase())) {
+    if ((existing || []).some((w: { nama: string }) => w.nama.toLowerCase() === nama.toLowerCase())) {
       return { success: false, error: "Error: Nama Akun sudah ada!" };
     }
 

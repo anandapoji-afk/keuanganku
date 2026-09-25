@@ -94,11 +94,19 @@ export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<
       // ---- MODE EDIT ----
       const { data: rowLama } = await supabase
         .from('transactions')
-        .select('piutang_id, status_bayar, warna_highlight, catatan')
+        .select('piutang_id, status_bayar, warna_highlight, catatan, bukti')
         .eq('id', payload.rowIdx)
         .eq('workspace_id', wsId)
         .single();
       if (!rowLama) return { success: false, error: 'Error: Transaksi tidak ditemukan.' };
+
+      // Hapus bukti yang sudah di-remove oleh user dari storage
+      const buktiLamaDb = ((rowLama as unknown as { bukti?: string[] }).bukti || []) as string[];
+      const retainedSet = new Set(payload.buktiLama || []);
+      const yangDihapus = buktiLamaDb.filter((u) => !retainedSet.has(u));
+      for (const urlHapus of yangDihapus) {
+        await hapusBuktiDariSupabaseStorage(urlHapus);
+      }
 
       const piutangIdLama = rowLama.piutang_id || '';
       const statusBayarLama = rowLama.status_bayar || 'Lunas';

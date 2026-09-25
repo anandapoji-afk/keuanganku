@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import RingkasanPage from './ringkasan/page';
 
 export default function DashboardIndex() {
-  redirect('/ringkasan');
+  return <RingkasanPage />;
 }

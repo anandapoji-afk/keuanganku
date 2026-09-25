@@ -21,12 +21,12 @@ export async function tambahPembayaranDP(obj: TambahPembayaranDPPayload): Promis
     if (!wsId) return { success: false, error: 'Data akun tidak ditemukan!' };
 
     type BarisDP = { tipe: string; kategori: string; keterangan: string; nominal: number; status_bayar: string; total_tagihan: number };
-    const { data: rows } = await supabase
+    const { data: rowsRaw } = await supabase
       .from('transactions')
       .select('tipe, kategori, keterangan, nominal, status_bayar, total_tagihan')
       .eq('workspace_id', wsId)
-      .eq('piutang_id', obj.piutangId)
-      .returns<BarisDP[]>();
+      .eq('piutang_id', obj.piutangId);
+    const rows = rowsRaw as BarisDP[] | null;
 
     let masterRow: BarisDP | null = null;
     let totalDibayarSaatIni = 0;

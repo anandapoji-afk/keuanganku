@@ -26,7 +26,7 @@ export async function tambahKategori(obj: TambahKategoriPayload): Promise<Action
       .eq('workspace_id', wsId)
       .eq('tipe', obj.tipe);
 
-    if ((existing || []).some((k) => k.nama.toLowerCase() === nama.toLowerCase())) {
+    if ((existing || []).some((k: { nama: string }) => k.nama.toLowerCase() === nama.toLowerCase())) {
       return { success: false, error: `Error: Kategori '${nama}' sudah ada!` };
     }
 

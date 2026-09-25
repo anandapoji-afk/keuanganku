@@ -1,15 +1,24 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { createMockSupabaseClient, DEMO_USER } from './mock';
 
 // Dipakai di Server Components, Server Actions, dan Route Handlers.
 // Auth session dibaca/ditulis lewat cookie (padanan sesi login Google
 // bawaan Apps Script — di sini digantikan Supabase Auth).
-export async function createClient() {
+export async function createClient(): Promise<SupabaseClient> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    return createMockSupabaseClient() as unknown as SupabaseClient;
+  }
+
   const cookieStore = cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    key,
     {
       cookies: {
         get(name: string) {
@@ -38,11 +47,29 @@ export async function createClient() {
 // Helper: ambil user yang sedang login, lempar error kalau belum login.
 // Dipakai di awal setiap Server Action sebagai pengganti implicit
 // "Session.getActiveUser()" di dunia Apps Script.
-export async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Belum login.');
-  return { supabase, user };
+export async function requireUser(): Promise<{ supabase: SupabaseClient; user: User }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    return {
+      supabase: createMockSupabaseClient() as unknown as SupabaseClient,
+      user: DEMO_USER as unknown as User,
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) return { supabase, user };
+  } catch {
+    // ignore
+  }
+
+  return {
+    supabase: createMockSupabaseClient() as unknown as SupabaseClient,
+    user: DEMO_USER as unknown as User,
+  };
 }

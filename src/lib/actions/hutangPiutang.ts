@@ -72,12 +72,12 @@ export async function tambahPembayaranHutangPiutang(obj: TambahPembayaranHutangP
     if (!wsId) return { success: false, error: 'Data akun tidak ditemukan!' };
 
     type BarisHP = { kategori: string; pihak_terkait: string; nominal: number; peranan_hp: string };
-    const { data: rows } = await supabase
+    const { data: rowsRaw } = await supabase
       .from('transactions')
       .select('kategori, pihak_terkait, nominal, peranan_hp')
       .eq('workspace_id', wsId)
-      .eq('hutang_piutang_id', obj.hpId)
-      .returns<BarisHP[]>();
+      .eq('hutang_piutang_id', obj.hpId);
+    const rows = rowsRaw as BarisHP[] | null;
 
     let pokok: BarisHP | null = null;
     let totalDibayarSaatIni = 0;

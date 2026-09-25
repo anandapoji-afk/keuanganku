@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt } from 'lucide-react';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
 import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex } from '@/lib/utils';
@@ -53,6 +55,9 @@ function rentangDariPreset(preset: PresetPeriode, custom: { dari: string; sampai
   return custom.dari && custom.sampai ? custom : null;
 }
 
+const FALLBACK_RECEIPT_SVG =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%230284c7" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+
 export default function TransaksiPage() {
   const { loading, init, filteredTransaksi, filter, setFilter, clearFilter, refetchRiwayat } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
@@ -60,6 +65,8 @@ export default function TransaksiPage() {
   const [form, setForm] = useState({ ...FORM_KOSONG });
   const [fileBaru, setFileBaru] = useState<File[]>([]);
   const [buktiLama, setBuktiLama] = useState<string[]>([]);
+  const [previewBuktiUrl, setPreviewBuktiUrl] = useState<string | null>(null);
+  const [previewBuktiTitle, setPreviewBuktiTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [presetPeriode, setPresetPeriode] = useState<PresetPeriode>('bulan');
@@ -160,6 +167,19 @@ export default function TransaksiPage() {
     setModalOpen(true);
   }
 
+  function bukaPreviewBukti(url: string, title?: string) {
+    setPreviewBuktiUrl(url);
+    setPreviewBuktiTitle(title || 'Bukti Transaksi');
+  }
+
+  function hapusBuktiLama(index: number) {
+    setBuktiLama((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  function hapusFileBaru(index: number) {
+    setFileBaru((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
   async function simpan() {
     setSaving(true);
     setErrMsg(null);
@@ -218,28 +238,33 @@ export default function TransaksiPage() {
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <input
-            value={filter.search}
-            onChange={(e) => setFilter((prev) => ({ ...prev, search: e.target.value }))}
-            placeholder="Cari transaksi, rekening, kategori, pihak..."
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"
-          />
+        <div className="relative flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+            <input
+              value={filter.search}
+              onChange={(e) => setFilter((prev) => ({ ...prev, search: e.target.value }))}
+              placeholder="Cari transaksi, rekening, kategori, pihak..."
+              className="w-full bg-white border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 rounded-xl pl-9 pr-3 py-2 text-xs shadow-sm transition outline-none"
+            />
+          </div>
           {Object.values(filter).some((v) => typeof v === 'string' ? v !== '' : false) && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.92 }}
               onClick={() => {
                 clearFilter();
                 setPresetPeriode('semua');
                 setRentangKustom({ dari: '', sampai: '' });
               }}
-              className="text-[10px] text-red-500 border border-red-200 rounded px-2 py-1.5 whitespace-nowrap"
+              className="flex items-center gap-1 text-[11px] font-medium text-rose-600 bg-rose-50 border border-rose-200/80 rounded-xl px-2.5 py-2 whitespace-nowrap shadow-sm hover:bg-rose-100 transition"
             >
-              Hapus Filter
-            </button>
+              <X size={12} strokeWidth={2.5} />
+              <span>Reset</span>
+            </motion.button>
           )}
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5 scroll-smooth">
           {(
             [
               { v: 'hari', label: 'Hari Ini' },
@@ -249,15 +274,18 @@ export default function TransaksiPage() {
               { v: 'semua', label: 'Semua' },
             ] as const
           ).map((p) => (
-            <button
+            <motion.button
               key={p.v}
+              whileTap={{ scale: 0.93 }}
               onClick={() => applyPresetPreset(p.v)}
-              className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap shrink-0 ${
-                presetPeriode === p.v ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500'
+              className={`text-xs px-3.5 py-1.5 rounded-xl border whitespace-nowrap shrink-0 font-medium transition-all ${
+                presetPeriode === p.v
+                  ? 'bg-slate-800 border-slate-800 text-white shadow-sm'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
               {p.label}
-            </button>
+            </motion.button>
           ))}
         </div>
 
@@ -272,7 +300,7 @@ export default function TransaksiPage() {
                 const aktif = rentangDariPreset('rentang', next);
                 setFilter((prev) => ({ ...prev, startDate: aktif?.dari || '', endDate: aktif?.sampai || '' }));
               }}
-              className="flex-1 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
+              className="flex-1 bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm"
             />
             <input
               type="date"
@@ -283,7 +311,7 @@ export default function TransaksiPage() {
                 const aktif = rentangDariPreset('rentang', next);
                 setFilter((prev) => ({ ...prev, startDate: aktif?.dari || '', endDate: aktif?.sampai || '' }));
               }}
-              className="flex-1 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
+              className="flex-1 bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm"
             />
           </div>
         )}
@@ -292,9 +320,9 @@ export default function TransaksiPage() {
           <select
             value={filter.warna}
             onChange={(e) => setFilter((prev) => ({ ...prev, warna: e.target.value as 'Semua' | WarnaHighlight }))}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
+            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none focus:border-sky-500"
           >
-            <option value="Semua">Semua warna</option>
+            <option value="Semua">Semua warna highlight</option>
             {DAFTAR_WARNA_HIGHLIGHT.map((w) => (
               <option key={w.value || 'none'} value={w.value}>
                 {w.label}
@@ -305,7 +333,7 @@ export default function TransaksiPage() {
           <select
             value={filter.rekening}
             onChange={(e) => setFilter((prev) => ({ ...prev, rekening: e.target.value }))}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
+            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none focus:border-sky-500"
           >
             <option value="">Semua rekening</option>
             {init.rekenings.map((r) => (
@@ -315,33 +343,53 @@ export default function TransaksiPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1.5">
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/60">
           {(['Semua', 'Pemasukan', 'Pengeluaran'] as const).map((f) => (
-            <button
+            <motion.button
               key={f}
+              whileTap={{ scale: 0.94 }}
               onClick={() => setFilter((prev) => ({ ...prev, tipe: f }))}
-              className={`text-xs px-3 py-1.5 rounded-full border ${
-                filter.tipe === f ? 'bg-sky-600 border-sky-600 text-white' : 'border-slate-200 text-slate-500'
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                filter.tipe === f
+                  ? 'bg-white text-slate-900 shadow-sm font-semibold'
+                  : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               {f}
-            </button>
+            </motion.button>
           ))}
         </div>
-        <button onClick={bukaTambah} className="text-xs bg-sky-600 text-white px-3.5 py-2 rounded-lg font-semibold shrink-0">
-          + Tambah
-        </button>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.03 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+          onClick={bukaTambah}
+          className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white px-3.5 py-2 rounded-xl font-bold shrink-0 shadow-sm shadow-sky-600/20 transition-all"
+        >
+          <Plus size={15} strokeWidth={2.6} />
+          <span>Tambah</span>
+        </motion.button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-3">
-          <div className="text-[11px] text-slate-400">Pemasukan (periode ini)</div>
-          <div className="text-emerald-600 font-bold text-sm mt-0.5">{rp(totalTampil.masuk)}</div>
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-400">Pemasukan Periode Ini</span>
+            <div className="w-5 h-5 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <ArrowDownLeft size={13} strokeWidth={2.4} />
+            </div>
+          </div>
+          <div className="text-emerald-600 font-bold text-sm mt-1">{rp(totalTampil.masuk)}</div>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-3">
-          <div className="text-[11px] text-slate-400">Pengeluaran (periode ini)</div>
-          <div className="text-red-600 font-bold text-sm mt-0.5">{rp(totalTampil.keluar)}</div>
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-400">Pengeluaran Periode Ini</span>
+            <div className="w-5 h-5 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
+              <ArrowUpRight size={13} strokeWidth={2.4} />
+            </div>
+          </div>
+          <div className="text-rose-600 font-bold text-sm mt-1">{rp(totalTampil.keluar)}</div>
         </div>
       </div>
 
@@ -386,6 +434,48 @@ export default function TransaksiPage() {
                   />
                 ))}
               </div>
+
+              {/* Preview Bukti di Daftar Transaksi */}
+              {t.bukti && t.bukti.length > 0 && (
+                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-100 flex-wrap">
+                  <span className="text-[10px] font-medium text-slate-400">Bukti ({t.bukti.length}):</span>
+                  {t.bukti.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        bukaPreviewBukti(url, `Bukti ${i + 1}/${t.bukti.length} · ${t.keterangan}`);
+                      }}
+                      className="relative group rounded-md border border-slate-200 overflow-hidden hover:ring-2 hover:ring-sky-400 transition"
+                      title="Klik untuk melihat bukti transaksi"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt={`Bukti ${i + 1}`}
+                        className="w-7 h-7 object-cover bg-slate-100"
+                        onError={(e) => {
+                          e.currentTarget.src = FALLBACK_RECEIPT_SVG;
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white">
+                        🔍
+                      </div>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      bukaPreviewBukti(t.bukti[0], `Bukti 1/${t.bukti.length} · ${t.keterangan}`);
+                    }}
+                    className="text-[11px] text-sky-600 hover:text-sky-700 font-medium ml-1"
+                  >
+                    Lihat Bukti
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -488,13 +578,104 @@ export default function TransaksiPage() {
           </Field>
 
           <Field label="Bukti Transaksi (opsional, bisa lebih dari 1)">
-            <input type="file" accept="image/*" multiple onChange={(e) => setFileBaru(Array.from(e.target.files || []))} className="text-xs" />
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setFileBaru((prev) => [...prev, ...files]);
+                e.target.value = '';
+              }}
+              className="text-xs w-full text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer"
+            />
+
+            {/* Bukti Lama (Existing) */}
             {buktiLama.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {buktiLama.map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={url} alt="bukti" className="w-14 h-14 object-cover rounded border border-slate-200" />
-                ))}
+              <div className="space-y-1.5 mt-2.5">
+                <div className="flex justify-between items-center text-[11px] font-semibold text-slate-600">
+                  <span>Bukti Tersimpan ({buktiLama.length}):</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Klik × untuk menghapus</span>
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {buktiLama.map((url, i) => (
+                    <div key={i} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => bukaPreviewBukti(url, `Bukti Tersimpan ${i + 1}`)}
+                        className="block rounded-lg overflow-hidden border-2 border-slate-200 hover:border-sky-400 focus:outline-none transition shadow-sm"
+                        title="Klik untuk melihat ukuran penuh"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`Bukti ${i + 1}`}
+                          className="w-14 h-14 object-cover bg-slate-100"
+                          onError={(e) => {
+                            e.currentTarget.src = FALLBACK_RECEIPT_SVG;
+                          }}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          hapusBuktiLama(i);
+                        }}
+                        title="Hapus bukti ini"
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Bukti Baru (Newly Added) */}
+            {fileBaru.length > 0 && (
+              <div className="space-y-1.5 mt-2.5">
+                <div className="flex justify-between items-center text-[11px] font-semibold text-emerald-700">
+                  <span>Bukti Baru Dipilih ({fileBaru.length}):</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Klik × untuk membatalkan</span>
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {fileBaru.map((file, i) => {
+                    const objectUrl = URL.createObjectURL(file);
+                    return (
+                      <div key={i} className="relative group">
+                        <button
+                          type="button"
+                          onClick={() => bukaPreviewBukti(objectUrl, `Bukti Baru: ${file.name}`)}
+                          className="block rounded-lg overflow-hidden border-2 border-emerald-300 hover:border-emerald-500 focus:outline-none transition shadow-sm"
+                          title="Klik untuk melihat preview"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={objectUrl}
+                            alt={file.name}
+                            className="w-14 h-14 object-cover bg-slate-100"
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            hapusFileBaru(i);
+                          }}
+                          title="Batalkan file ini"
+                          className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition"
+                        >
+                          ×
+                        </button>
+                        <span className="block text-[9px] text-slate-500 truncate max-w-[56px] mt-0.5" title={file.name}>
+                          {file.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </Field>
@@ -504,6 +685,59 @@ export default function TransaksiPage() {
           <button onClick={simpan} disabled={saving} className="w-full bg-sky-600 text-white text-sm font-semibold py-2.5 rounded-lg disabled:opacity-50">
             {saving ? 'Menyimpan...' : 'Simpan'}
           </button>
+        </div>
+      </Modal>
+
+      {/* Modal Preview Bukti Penuh (Lightbox) */}
+      <Modal open={!!previewBuktiUrl} onClose={() => setPreviewBuktiUrl(null)} title={previewBuktiTitle || 'Preview Bukti Transaksi'}>
+        <div className="space-y-3">
+          <div className="bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-3 min-h-[260px] max-h-[70vh]">
+            {previewBuktiUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewBuktiUrl}
+                alt="Preview Bukti"
+                className="max-h-[65vh] w-auto max-w-full object-contain rounded shadow"
+                onError={(e) => {
+                  e.currentTarget.src = FALLBACK_RECEIPT_SVG;
+                }}
+              />
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+            <a
+              href={previewBuktiUrl || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              download="bukti-transaksi.jpg"
+              className="text-xs text-sky-700 hover:text-sky-800 font-medium flex items-center gap-1.5 border border-sky-300 px-3 py-1.5 rounded-lg bg-sky-50 shadow-sm transition"
+            >
+              <span>⬇️</span> Unduh / Buka Gambar Asli
+            </a>
+
+            <div className="flex items-center gap-2">
+              {modalOpen && editId && previewBuktiUrl && buktiLama.includes(previewBuktiUrl) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBuktiLama((prev) => prev.filter((u) => u !== previewBuktiUrl));
+                    setPreviewBuktiUrl(null);
+                  }}
+                  className="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold px-3 py-1.5 rounded-lg transition"
+                >
+                  🗑️ Hapus Bukti Ini
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPreviewBuktiUrl(null)}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-1.5 rounded-lg font-medium transition"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         </div>
       </Modal>
 

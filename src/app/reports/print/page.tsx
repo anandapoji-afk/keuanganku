@@ -222,13 +222,13 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
                   </tbody>
                 </table>
                 <div className="flex flex-wrap gap-2 justify-center bg-slate-50 border border-dashed border-slate-300 rounded p-2">
-                  {item.bukti.map((url, bi) => (
+                  {item.bukti.filter(Boolean).map((url, bi) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       key={bi}
                       src={url}
                       alt={`Bukti ${item.keterangan}`}
-                      className="rounded border border-slate-300 object-contain"
+                      className="rounded border border-slate-300 object-contain bg-white"
                       style={{ maxHeight: item.bukti.length > 1 ? 320 : 340, maxWidth: item.bukti.length > 1 ? '47%' : '96%' }}
                     />
                   ))}

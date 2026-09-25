@@ -45,9 +45,12 @@ export async function hapusBuktiDariSupabaseStorage(url: string): Promise<void> 
     // path publik Supabase Storage: .../storage/v1/object/public/<bucket>/<path>
     const marker = `/object/public/${BUCKET}/`;
     const idx = url.indexOf(marker);
-    if (idx === -1) return;
-    const path = decodeURIComponent(url.slice(idx + marker.length));
-    await supabase.storage.from(BUCKET).remove([path]);
+    if (idx !== -1) {
+      const path = decodeURIComponent(url.slice(idx + marker.length));
+      await supabase.storage.from(BUCKET).remove([path]);
+    } else {
+      await supabase.storage.from(BUCKET).remove([url]);
+    }
   } catch {
     // best-effort, sama seperti try/catch kosong di GAS lama
   }
