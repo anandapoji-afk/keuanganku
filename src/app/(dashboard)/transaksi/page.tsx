@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt } from 'lucide-react';
 import { useAppData } from '@/components/layout/AppDataProvider';
@@ -64,6 +64,7 @@ export default function TransaksiPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...FORM_KOSONG });
   const [fileBaru, setFileBaru] = useState<File[]>([]);
+  const [fileBaruUrls, setFileBaruUrls] = useState<string[]>([]);
   const [buktiLama, setBuktiLama] = useState<string[]>([]);
   const [previewBuktiUrl, setPreviewBuktiUrl] = useState<string | null>(null);
   const [previewBuktiTitle, setPreviewBuktiTitle] = useState('');
@@ -71,6 +72,16 @@ export default function TransaksiPage() {
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [presetPeriode, setPresetPeriode] = useState<PresetPeriode>('bulan');
   const [rentangKustom, setRentangKustom] = useState({ dari: '', sampai: '' });
+
+  // Buat object URL sekali per perubahan fileBaru, bukan setiap render —
+  // mencegah memory leak dan mismatch URL saat preview dibuka.
+  useEffect(() => {
+    const urls = fileBaru.map((f) => URL.createObjectURL(f));
+    setFileBaruUrls(urls);
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [fileBaru]);
 
   const daftarKategori = useMemo(() => {
     const map = form.tipe === 'Pemasukan' ? init.katMasuk : init.katKeluar;
@@ -166,6 +177,15 @@ export default function TransaksiPage() {
     setErrMsg(null);
     setModalOpen(true);
   }
+
+  // Tutup lightbox otomatis kalau blob URL yang sedang dipreview sudah di-revoke
+  // (misal user hapus/tambah file baru saat lightbox masih terbuka).
+  useEffect(() => {
+    if (previewBuktiUrl && previewBuktiUrl.startsWith('blob:') && !fileBaruUrls.includes(previewBuktiUrl)) {
+      setPreviewBuktiUrl(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileBaruUrls]);
 
   function bukaPreviewBukti(url: string, title?: string) {
     setPreviewBuktiUrl(url);
@@ -643,21 +663,23 @@ export default function TransaksiPage() {
                 </div>
                 <div className="flex flex-wrap gap-2.5">
                   {fileBaru.map((file, i) => {
-                    const objectUrl = URL.createObjectURL(file);
+                    const objectUrl = fileBaruUrls[i];
                     return (
                       <div key={i} className="relative group">
                         <button
                           type="button"
-                          onClick={() => bukaPreviewBukti(objectUrl, `Bukti Baru: ${file.name}`)}
+                          onClick={() => objectUrl && bukaPreviewBukti(objectUrl, `Bukti Baru: ${file.name}`)}
                           className="block rounded-lg overflow-hidden border-2 border-emerald-300 hover:border-emerald-500 focus:outline-none transition shadow-sm"
                           title="Klik untuk melihat preview"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={objectUrl}
-                            alt={file.name}
-                            className="w-14 h-14 object-cover bg-slate-100"
-                          />
+                          {objectUrl && (
+                            <img
+                              src={objectUrl}
+                              alt={file.name}
+                              className="w-14 h-14 object-cover bg-slate-100"
+                            />
+                          )}
                         </button>
                         <button
                           type="button"
