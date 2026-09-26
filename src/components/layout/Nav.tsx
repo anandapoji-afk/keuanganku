@@ -84,7 +84,7 @@ export function BottomNav() {
   };
 
   return (
-    <nav className="no-print fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] md:hidden">
+    <nav className="no-print fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
       {/* Scroll indicator overlay - Left Fade & Button */}
       {canScrollLeft && (
         <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pl-1 pr-4 bg-gradient-to-r from-white via-white/90 to-transparent pointer-events-none">
@@ -186,7 +186,6 @@ export function BottomNav() {
 }
 
 export function TopBar() {
-  const pathname = usePathname();
   const { init, gantiWorkspace, refetchAll, loading } = useAppData();
   const router = useRouter();
   const [modalAkunBaru, setModalAkunBaru] = useState(false);
@@ -304,45 +303,8 @@ export function TopBar() {
           </div>
         </Link>
 
-        {/* Right Area: Desktop Nav & Workspace Switcher */}
+        {/* Right Area: Workspace Switcher & Logout */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/70 p-1 rounded-xl border border-slate-200/60">
-            {ALL_MENU.map((m) => {
-              const active = pathname?.startsWith(m.href);
-              const Icon = m.icon;
-              return (
-                <Link
-                  key={m.href}
-                  href={m.href}
-                  className="relative px-2.5 py-1.5 rounded-lg text-xs font-medium select-none group flex items-center gap-1.5"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.94 }}
-                    className="flex items-center gap-1.5"
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="activeDesktopTab"
-                        className="absolute inset-0 bg-white rounded-lg shadow-sm -z-10"
-                        transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                      />
-                    )}
-                    <Icon
-                      size={15}
-                      strokeWidth={active ? 2.2 : 1.8}
-                      className={active ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'}
-                    />
-                    <span className={active ? 'text-slate-900 font-semibold' : 'text-slate-600 group-hover:text-slate-900'}>
-                      {m.label}
-                    </span>
-                  </motion.div>
-                </Link>
-              );
-            })}
-          </nav>
-
           {/* Workspace Switcher */}
           <div className="relative flex items-center">
             <select
