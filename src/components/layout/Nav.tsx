@@ -117,9 +117,10 @@ export function BottomNav() {
       <div
         ref={navRef}
         onScroll={checkScroll}
-        className="no-scrollbar overflow-x-auto flex items-center gap-1.5 px-3 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] scroll-smooth snap-x snap-mandatory"
+        className="no-scrollbar overflow-x-auto flex items-center justify-center gap-1.5 px-3 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] scroll-smooth snap-x snap-mandatory"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
+        <div className="flex items-center gap-1.5 mx-auto">
         {ALL_MENU.map((m) => {
           const active = pathname?.startsWith(m.href);
           const Icon = m.icon;
@@ -180,6 +181,7 @@ export function BottomNav() {
             </Link>
           );
         })}
+        </div>
       </div>
     </nav>
   );
