@@ -10,11 +10,13 @@ import { simpanHutangPiutangBaru, tambahPembayaranHutangPiutang } from '@/lib/ac
 import type { HutangDPItem, HutangPiutangItem } from '@/lib/types';
 
 export default function HutangPiutangPage() {
-  const { loading, init, filteredTransaksi, setFilter, refetchRiwayat } = useAppData();
+  const { loading, init, transaksi, setFilter, refetchRiwayat } = useAppData();
   const [tab, setTab] = useState<'dp' | 'hp'>('dp');
 
-  const daftarDP = useMemo(() => hitungDaftarHutangDariGrid(filteredTransaksi), [filteredTransaksi]);
-  const daftarHP = useMemo(() => hitungDaftarHutangPiutangDariGrid(filteredTransaksi), [filteredTransaksi]);
+  // Menu ini sengaja tidak mengikuti filter periode dari menu Transaksi —
+  // selalu menampilkan seluruh riwayat hutang/piutang & DP/cicilan.
+  const daftarDP = useMemo(() => hitungDaftarHutangDariGrid(transaksi), [transaksi]);
+  const daftarHP = useMemo(() => hitungDaftarHutangPiutangDariGrid(transaksi), [transaksi]);
 
   const [bayarDP, setBayarDP] = useState<HutangDPItem | null>(null);
   const [bayarHP, setBayarHP] = useState<HutangPiutangItem | null>(null);
