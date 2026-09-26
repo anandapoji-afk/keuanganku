@@ -27,41 +27,40 @@ const WARNA_KARTU = [
 
 export default function AnggaranPage() {
   const router = useRouter();
-  const { loading, init, transaksi, anggaran, setFilter, refetchRiwayat } = useAppData();
-  const [bulanTahun, setBulanTahun] = useState(bulanTahunSekarang());
+  const { loading, init, filter, filteredTransaksi, anggaran, setFilter, refetchRiwayat } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ kategori: '', subKategori: '', nominal: '' });
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
+  // Periode set-anggaran (utk kolom "bulan_tahun" saat simpan) mengikuti filter
+  // bulan aktif dari menu Transaksi; kalau filter bulan sedang tidak dipakai
+  // (mis. preset "Semua"/"Tahun"/"Rentang"), jatuh ke bulan berjalan.
+  const bulanTahun = filter.bulan || bulanTahunSekarang();
   const [tahun, bulan] = bulanTahun.split('-').map(Number);
 
-  // ===== Rekap Pemasukan: total per kategori Pemasukan pada periode ini
-  // (hanya kategori yang punya transaksi di periode ini yang ditampilkan) =====
+  // ===== Rekap Pemasukan: total per kategori Pemasukan, mengikuti filter
+  // periode aktif dari menu Transaksi (bukan filter bulan terpisah lagi) =====
   const rekapPemasukan = useMemo(() => {
     const totals: Record<string, number> = {};
-    transaksi.forEach((t) => {
+    filteredTransaksi.forEach((t) => {
       if (t.tipe !== 'Pemasukan') return;
       if (['Transfer', 'Hutang', 'Piutang', 'Tabungan'].includes(t.kategori)) return;
-      const tgl = new Date(t.tanggal);
-      if (tgl.getMonth() + 1 !== bulan || tgl.getFullYear() !== tahun) return;
       totals[t.kategori] = (totals[t.kategori] || 0) + t.nominal;
     });
     return Object.entries(totals)
       .filter(([, v]) => v !== 0)
       .sort((a, b) => b[1] - a[1]);
-  }, [transaksi, bulan, tahun]);
+  }, [filteredTransaksi]);
 
-  // ===== Rekap Pengeluaran & Anggaran: total per kategori Pengeluaran pada
-  // periode ini + limit anggaran (kalau sudah di-set utk kategori tsb, tanpa
-  // sub kategori) =====
+  // ===== Rekap Pengeluaran & Anggaran: total per kategori Pengeluaran mengikuti
+  // filter periode aktif + limit anggaran (kalau sudah di-set, memakai bulan/tahun
+  // dari filter aktif — hanya relevan saat filter bulan sedang dipakai) =====
   const rekapPengeluaran = useMemo(() => {
     const totals: Record<string, number> = {};
-    transaksi.forEach((t) => {
+    filteredTransaksi.forEach((t) => {
       if (t.tipe !== 'Pengeluaran') return;
       if (['Transfer', 'Hutang', 'Piutang', 'Tabungan'].includes(t.kategori)) return;
-      const tgl = new Date(t.tanggal);
-      if (tgl.getMonth() + 1 !== bulan || tgl.getFullYear() !== tahun) return;
       totals[t.kategori] = (totals[t.kategori] || 0) + t.nominal;
     });
     return Object.entries(totals)
@@ -71,23 +70,21 @@ export default function AnggaranPage() {
         const limit = anggaran.find((a) => a.tahun === tahun && a.bulan === bulan && a.kategori === kategori && !a.sub_kategori);
         return { kategori, terpakai, limit: limit ? limit.nominal : null };
       });
-  }, [transaksi, anggaran, bulan, tahun]);
+  }, [filteredTransaksi, anggaran, bulan, tahun]);
 
   // ===== Rekap Sub Kategori Pengeluaran: total per sub kategori (lintas
-  // kategori) pada periode ini =====
+  // kategori), mengikuti filter periode aktif =====
   const rekapSubKategori = useMemo(() => {
     const totals: Record<string, number> = {};
-    transaksi.forEach((t) => {
+    filteredTransaksi.forEach((t) => {
       if (t.tipe !== 'Pengeluaran' || !t.sub_kategori) return;
-      const tgl = new Date(t.tanggal);
-      if (tgl.getMonth() + 1 !== bulan || tgl.getFullYear() !== tahun) return;
       const key = `${t.kategori} » ${t.sub_kategori}`;
       totals[key] = (totals[key] || 0) + t.nominal;
     });
     return Object.entries(totals)
       .filter(([, v]) => v !== 0)
       .sort((a, b) => b[1] - a[1]);
-  }, [transaksi, bulan, tahun]);
+  }, [filteredTransaksi]);
 
   function bukaSetAnggaran(kategoriAwal?: string) {
     setForm({ kategori: kategoriAwal || '', subKategori: '', nominal: '' });
@@ -109,12 +106,6 @@ export default function AnggaranPage() {
       search: search || '',
       kategori: kategori || '',
       tipe,
-      bulan: '',
-      tahun: '',
-      tanggal: '',
-      startDate: '',
-      endDate: '',
-      rekening: '',
     }));
     router.push('/transaksi');
   }
