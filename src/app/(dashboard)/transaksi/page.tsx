@@ -36,6 +36,28 @@ const FORM_KOSONG = {
 
 type PresetPeriode = 'semua' | 'hari' | 'bulan' | 'tahun' | 'rentang';
 
+// Palet chip kategori — kategori yang sama selalu dapat warna yang sama,
+// dipilih lewat hash sederhana dari nama kategori (bukan mapping manual),
+// jadi otomatis bekerja untuk kategori apa pun yang user buat sendiri.
+const WARNA_CHIP_KATEGORI = [
+  'bg-orange-100 text-orange-700',
+  'bg-blue-100 text-blue-700',
+  'bg-pink-100 text-pink-700',
+  'bg-sky-100 text-sky-700',
+  'bg-amber-100 text-amber-700',
+  'bg-fuchsia-100 text-fuchsia-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-violet-100 text-violet-700',
+  'bg-teal-100 text-teal-700',
+  'bg-rose-100 text-rose-700',
+];
+
+function warnaChipKategori(kategori: string): string {
+  let h = 0;
+  for (let i = 0; i < kategori.length; i++) h = (h * 31 + kategori.charCodeAt(i)) >>> 0;
+  return WARNA_CHIP_KATEGORI[h % WARNA_CHIP_KATEGORI.length];
+}
+
 function rentangDariPreset(preset: PresetPeriode, custom: { dari: string; sampai: string }): { dari: string; sampai: string } | null {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -421,10 +443,15 @@ export default function TransaksiPage() {
               <div className="flex justify-between items-start gap-2">
                 <button className="text-left flex-1" onClick={() => bukaEdit(t)}>
                   <div className="text-sm text-slate-700 font-medium">{t.keterangan}</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    {t.tanggal} {'\u00b7'} {t.kategori}
-                    {t.sub_kategori ? ` \u00bb ${t.sub_kategori}` : ''} {'\u00b7'} {t.rekening}
-                    {t.status_bayar === 'DP' ? ' \u00b7 DP' : ''}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${warnaChipKategori(t.kategori)}`}>
+                      {t.kategori}
+                      {t.sub_kategori ? ` \u00bb ${t.sub_kategori}` : ''}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {t.tanggal} {'\u00b7'} {t.rekening}
+                      {t.status_bayar === 'DP' ? ' \u00b7 DP' : ''}
+                    </span>
                   </div>
                   {t.catatan && <div className="text-[11px] text-amber-600 mt-0.5">{t.catatan}</div>}
                 </button>
