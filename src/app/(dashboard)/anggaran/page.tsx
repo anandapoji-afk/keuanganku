@@ -134,12 +134,9 @@ export default function AnggaranPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="font-bold text-slate-800">Anggaran</h1>
-          <p className="text-xs text-slate-400">Pantau pemasukan dan pengeluaran Anda</p>
-        </div>
-        <input type="month" value={bulanTahun} onChange={(e) => setBulanTahun(e.target.value)} className="inp2" />
+      <div>
+        <h1 className="font-bold text-slate-800">Anggaran</h1>
+        <p className="text-xs text-slate-400">Pantau pemasukan dan pengeluaran Anda</p>
       </div>
 
       {/* ===== REKAP PEMASUKAN ===== */}
