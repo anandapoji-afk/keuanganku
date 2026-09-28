@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt } from 'lucide-react';
+import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
 import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex } from '@/lib/utils';
@@ -33,6 +33,39 @@ const FORM_KOSONG = {
   warnaHighlight: '' as WarnaHighlight,
   catatan: '',
 };
+
+type KolomSort = 'tanggal' | 'nominal' | 'keterangan' | 'kategori' | 'rekening' | 'tipe' | 'created_at';
+type AturanSort = { kolom: KolomSort; arah: 'asc' | 'desc' };
+
+const KOLOM_SORT: { key: KolomSort; label: string; tipe: 'date' | 'number' | 'text' | 'timestamp'; arahAwal: 'asc' | 'desc' }[] = [
+  { key: 'tanggal', label: 'Tanggal', tipe: 'date', arahAwal: 'desc' },
+  { key: 'nominal', label: 'Nominal', tipe: 'number', arahAwal: 'desc' },
+  { key: 'keterangan', label: 'Keterangan', tipe: 'text', arahAwal: 'asc' },
+  { key: 'kategori', label: 'Kategori', tipe: 'text', arahAwal: 'asc' },
+  { key: 'rekening', label: 'Rekening', tipe: 'text', arahAwal: 'asc' },
+  { key: 'tipe', label: 'Tipe', tipe: 'text', arahAwal: 'asc' },
+  { key: 'created_at', label: 'Waktu input', tipe: 'timestamp', arahAwal: 'desc' },
+];
+
+const LABEL_ARAH: Record<'date' | 'number' | 'text' | 'timestamp', { asc: string; desc: string }> = {
+  date: { asc: 'Lama \u2192 Baru', desc: 'Baru \u2192 Lama' },
+  timestamp: { asc: 'Lama \u2192 Baru', desc: 'Baru \u2192 Lama' },
+  number: { asc: '1 \u2192 9', desc: '9 \u2192 1' },
+  text: { asc: 'A \u2192 Z', desc: 'Z \u2192 A' },
+};
+
+function bandingkanTransaksi(a: Transaction, b: Transaction, kolom: KolomSort): number {
+  switch (kolom) {
+    case 'tanggal':
+      return `${a.tanggal} ${a.jam || '00:00'}`.localeCompare(`${b.tanggal} ${b.jam || '00:00'}`);
+    case 'nominal':
+      return (Number(a.nominal) || 0) - (Number(b.nominal) || 0);
+    case 'created_at':
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    default:
+      return String(a[kolom] || '').localeCompare(String(b[kolom] || ''), 'id', { sensitivity: 'base' });
+  }
+}
 
 type PresetPeriode = 'semua' | 'hari' | 'bulan' | 'tahun' | 'rentang';
 
@@ -116,6 +149,21 @@ export default function TransaksiPage() {
   }, [form.tipe, form.kategori, init]);
 
   const listTampil = filteredTransaksi;
+
+  const [aturanSort, setAturanSort] = useState<AturanSort[]>([]);
+
+  // Tanpa aturan: urutan bawaan (tanggal & jam terbaru di atas). Dengan aturan:
+  // urut berjenjang sesuai urutan aturan; sort stabil jadi seri tetap urutan bawaan.
+  const listUrut = useMemo(() => {
+    if (aturanSort.length === 0) return listTampil;
+    return listTampil.slice().sort((a, b) => {
+      for (const r of aturanSort) {
+        const hasil = bandingkanTransaksi(a, b, r.kolom);
+        if (hasil !== 0) return r.arah === 'asc' ? hasil : -hasil;
+      }
+      return 0;
+    });
+  }, [listTampil, aturanSort]);
 
   const totalTampil = useMemo(() => {
     let masuk = 0;
@@ -435,8 +483,13 @@ export default function TransaksiPage() {
         </div>
       </div>
 
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-slate-400">{listUrut.length} transaksi</span>
+        <SortMenu aturan={aturanSort} onTerapkan={setAturanSort} />
+      </div>
+
       <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-        {listTampil.map((t) => {
+        {listUrut.map((t) => {
           const hex = t.warna_highlight ? warnaHighlightHex(t.warna_highlight) : undefined;
           return (
             <div key={t.id} className="px-4 py-3" style={hex ? { background: hex } : undefined}>
@@ -809,6 +862,165 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="text-[11px] font-medium text-slate-500">{label}</label>
       <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+// Menu urutkan bergaya panel Supabase: pilih kolom lewat dropdown putus-putus,
+// atur arah tiap kolom, lalu "Terapkan pengurutan". Aturan berjenjang sesuai urutan tambah.
+function SortMenu({ aturan, onTerapkan }: { aturan: AturanSort[]; onTerapkan: (a: AturanSort[]) => void }) {
+  const [terbuka, setTerbuka] = useState(false);
+  const [pilihTerbuka, setPilihTerbuka] = useState(false);
+  const [draft, setDraft] = useState<AturanSort[]>(aturan);
+  const wadah = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!terbuka) return;
+    function klikLuar(e: MouseEvent | TouchEvent) {
+      if (wadah.current && !wadah.current.contains(e.target as Node)) {
+        setTerbuka(false);
+        setPilihTerbuka(false);
+      }
+    }
+    function tekanTombol(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setTerbuka(false);
+        setPilihTerbuka(false);
+      }
+    }
+    document.addEventListener('mousedown', klikLuar);
+    document.addEventListener('touchstart', klikLuar);
+    document.addEventListener('keydown', tekanTombol);
+    return () => {
+      document.removeEventListener('mousedown', klikLuar);
+      document.removeEventListener('touchstart', klikLuar);
+      document.removeEventListener('keydown', tekanTombol);
+    };
+  }, [terbuka]);
+
+  function toggle() {
+    if (terbuka) {
+      setTerbuka(false);
+      setPilihTerbuka(false);
+      return;
+    }
+    setDraft(aturan);
+    setTerbuka(true);
+  }
+
+  const kolomTersisa = KOLOM_SORT.filter((k) => !draft.some((d) => d.kolom === k.key));
+  const berubah = JSON.stringify(draft) !== JSON.stringify(aturan);
+
+  return (
+    <div className="relative" ref={wadah}>
+      <button
+        type="button"
+        onClick={toggle}
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition active:scale-95 ${
+          aturan.length > 0 ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-white border-slate-200 text-slate-600'
+        }`}
+      >
+        <ArrowUpDown size={13} />
+        Urutkan
+        {aturan.length > 0 && (
+          <span className="min-w-[16px] h-4 px-1 rounded-full bg-sky-600 text-white text-[10px] leading-4 text-center">{aturan.length}</span>
+        )}
+      </button>
+
+      {terbuka && (
+        <div className="absolute right-0 top-full mt-2 z-30 w-[19rem] max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-slate-200 shadow-xl p-4">
+          {draft.length === 0 ? (
+            <div className="mb-3">
+              <div className="text-sm font-semibold text-slate-700">Belum ada pengurutan</div>
+              <div className="text-xs text-slate-400 mt-0.5">Tambahkan kolom di bawah untuk mengurutkan tampilan</div>
+            </div>
+          ) : (
+            <div className="space-y-2 mb-3">
+              {draft.map((d, i) => {
+                const info = KOLOM_SORT.find((k) => k.key === d.kolom);
+                if (!info) return null;
+                return (
+                  <div key={d.kolom} className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-300 w-3 text-center">{i + 1}</span>
+                    <span className="flex-1 text-sm text-slate-700 truncate">{info.label}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((cur) => cur.map((x) => (x.kolom === d.kolom ? { ...x, arah: x.arah === 'asc' ? 'desc' : 'asc' } : x)))
+                      }
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 active:scale-95"
+                    >
+                      {d.arah === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                      {LABEL_ARAH[info.tipe][d.arah]}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Hapus urutan ${info.label}`}
+                      onClick={() => setDraft((cur) => cur.filter((x) => x.kolom !== d.kolom))}
+                      className="text-slate-300 hover:text-red-500"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {kolomTersisa.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPilihTerbuka((v) => !v)}
+                className="w-full flex items-center justify-between text-xs text-slate-600 border border-dashed border-slate-300 rounded-lg px-3 py-2 hover:bg-slate-50"
+              >
+                <span>{draft.length === 0 ? 'Pilih kolom untuk diurutkan' : 'Tambah kolom pengurutan'}</span>
+                <ChevronDown size={14} className={`transition-transform ${pilihTerbuka ? 'rotate-180' : ''}`} />
+              </button>
+              {pilihTerbuka && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-56 overflow-auto">
+                  {kolomTersisa.map((k) => (
+                    <button
+                      key={k.key}
+                      type="button"
+                      onClick={() => {
+                        setDraft((cur) => [...cur, { kolom: k.key, arah: k.arahAwal }]);
+                        setPilihTerbuka(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    >
+                      <span className="text-slate-700">{k.label}</span>
+                      <span className="text-[10px] text-slate-400">{k.tipe}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-2 mt-3">
+            {draft.length > 0 ? (
+              <button type="button" onClick={() => setDraft([])} className="text-[11px] text-slate-400 hover:text-red-500">
+                Hapus semua
+              </button>
+            ) : (
+              <span />
+            )}
+            <button
+              type="button"
+              disabled={!berubah}
+              onClick={() => {
+                onTerapkan(draft);
+                setTerbuka(false);
+                setPilihTerbuka(false);
+              }}
+              className="text-xs font-semibold px-3.5 py-2 rounded-lg bg-slate-800 text-white disabled:bg-slate-100 disabled:text-slate-300"
+            >
+              Terapkan pengurutan
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
