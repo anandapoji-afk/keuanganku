@@ -33,7 +33,7 @@ export interface MenuItem {
 }
 
 export const ALL_MENU: MenuItem[] = [
-  { href: '/ringkasan', label: 'Ringkasan', shortLabel: 'Ringkasan', icon: LayoutDashboard },
+  { href: '/ringkasan', label: 'Dashboard', shortLabel: 'Dashboard', icon: LayoutDashboard },
   { href: '/transaksi', label: 'Transaksi', shortLabel: 'Transaksi', icon: ArrowLeftRight },
   { href: '/anggaran', label: 'Anggaran', shortLabel: 'Anggaran', icon: PieChart },
   { href: '/hutang-piutang', label: 'Hutang & Piutang', shortLabel: 'Hutang', icon: Handshake },
