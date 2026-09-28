@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import { rp, formatTanggalIndo } from '@/lib/utils';
+import DashboardCharts from '@/components/dashboard/DashboardCharts';
 
-export default function RingkasanPage() {
+export default function DashboardPage() {
   const { loading, init, transaksi } = useAppData();
 
   const { totalSaldo, bulanIniMasuk, bulanIniKeluar, riwayatTerbaru } = useMemo(() => {
@@ -171,6 +172,9 @@ export default function RingkasanPage() {
           })}
         </div>
       </div>
+
+      {/* Grafik: pengeluaran per kategori, arus kas, anggaran */}
+      <DashboardCharts />
 
       {/* Transaksi Terkini */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm">
