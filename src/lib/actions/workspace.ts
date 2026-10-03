@@ -1,6 +1,7 @@
 'use server';
 
 import { requireUser } from '@/lib/supabase/server';
+import { hapusBuktiDariSupabaseStorage } from './upload';
 import type { ActionResult, InitWorkspaceData, KatMap } from '@/lib/types';
 
 // ============================================================
@@ -88,6 +89,75 @@ export async function tambahAkunWorkspace(namaBaru: string): Promise<ActionResul
       .insert(defaultKats.map((k) => ({ workspace_id: ws.id, tipe: k.tipe, nama: k.nama })));
 
     return { success: true, message: `Akun '${nama}' berhasil dibuat!` };
+  } catch (e) {
+    return { success: false, error: 'Error: ' + String(e) };
+  }
+}
+
+// Padanan hapusAkunWorkspace(namaWorkspace) — menghapus 1 akun/workspace beserta
+// SELURUH data miliknya: rekening, kategori, anggaran, transaksi, tabungan
+// (termasuk riwayat isi), dan file bukti transaksi di Storage.
+//
+// Baris tabel (accounts, categories, subcategories, budgets, transactions,
+// savings_targets, savings_deposits) sudah otomatis ikut terhapus lewat
+// `on delete cascade` di schema.sql begitu baris `workspaces` dihapus — TIDAK
+// perlu dihapus manual satu-satu di sini.
+//
+// Yang TIDAK ikut cascade oleh database: file bukti transaksi di Supabase
+// Storage (bucket terpisah dari tabel). File-file itu HARUS dihapus duluan di
+// sini, sebelum baris workspace dihapus — begitu workspace hilang, path
+// filenya (lewat join ke transactions) tidak bisa diambil lagi dan file jadi
+// sampah yatim permanen di storage.
+export async function hapusAkunWorkspace(namaWorkspace: string): Promise<ActionResult> {
+  try {
+    const { supabase, user } = await requireUser();
+    const nama = (namaWorkspace || '').trim();
+    if (!nama) return { success: false, error: 'Error: Nama akun tidak valid.' };
+
+    const { data: semuaWs } = await supabase
+      .from('workspaces')
+      .select('id, nama')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (!semuaWs || semuaWs.length === 0) return { success: false, error: 'Error: Akun tidak ditemukan.' };
+    if (semuaWs.length <= 1) {
+      return { success: false, error: 'Error: Tidak bisa menghapus akun terakhir. Minimal harus ada 1 akun.' };
+    }
+
+    const target = semuaWs.find((w) => w.nama === nama);
+    if (!target) return { success: false, error: 'Error: Akun tidak ditemukan.' };
+
+    // 1. Kumpulkan & hapus semua file bukti milik workspace ini dari Storage
+    //    (best-effort per file — satu file gagal dihapus tidak menggagalkan
+    //    seluruh proses, sama seperti pola di hapusTransaksi()).
+    const { data: rowsBukti } = await supabase
+      .from('transactions')
+      .select('bukti')
+      .eq('workspace_id', target.id)
+      .not('bukti', 'is', null);
+
+    const semuaUrlBukti = (rowsBukti || []).flatMap((r) => (r.bukti as string[]) || []);
+    for (const url of semuaUrlBukti) {
+      await hapusBuktiDariSupabaseStorage(url);
+    }
+
+    // 2. Hapus baris workspace -> cascade membereskan accounts, categories,
+    //    subcategories, budgets, transactions, savings_targets, savings_deposits.
+    const { error } = await supabase.from('workspaces').delete().eq('id', target.id).eq('user_id', user.id);
+    if (error) return { success: false, error: 'Error: ' + error.message };
+
+    // 3. Kalau workspace yang dihapus adalah workspace aktif user, pindahkan
+    //    preferensi ke akun lain yang tersisa supaya sesi berikutnya tidak
+    //    mengarah ke akun yang sudah tidak ada.
+    const pref = await ambilPreferensiUser();
+    const wsAktifSekarang = (pref?.workspace as string | undefined) || '';
+    if (wsAktifSekarang === nama) {
+      const sisa = semuaWs.find((w) => w.id !== target.id);
+      if (sisa) await simpanPreferensiUser({ workspace: sisa.nama });
+    }
+
+    return { success: true, message: `Akun '${nama}' beserta seluruh datanya berhasil dihapus.` };
   } catch (e) {
     return { success: false, error: 'Error: ' + String(e) };
   }
