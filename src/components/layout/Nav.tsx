@@ -19,10 +19,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAppData } from './AppDataProvider';
 import { createClient } from '@/lib/supabase/client';
-import { tambahAkunWorkspace } from '@/lib/actions/workspace';
+import { tambahAkunWorkspace, hapusAkunWorkspace } from '@/lib/actions/workspace';
 import Modal from '@/components/ui/Modal';
 
 export interface MenuItem {
@@ -194,6 +196,10 @@ export function TopBar() {
   const [namaAkunBaru, setNamaAkunBaru] = useState('');
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [modalHapusAkun, setModalHapusAkun] = useState(false);
+  const [konfirmasiHapus, setKonfirmasiHapus] = useState('');
+  const [busyHapus, setBusyHapus] = useState(false);
+  const [errMsgHapus, setErrMsgHapus] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
 
@@ -258,12 +264,35 @@ export function TopBar() {
     const res = await tambahAkunWorkspace(namaAkunBaru);
     setBusy(false);
     if (!res.success) {
-      setErrMsg(res.error);
+      setErrMsg(res.error || 'Terjadi kesalahan.');
       return;
     }
     setModalAkunBaru(false);
     await refetchAll();
     await gantiWorkspace(namaAkunBaru.trim());
+  }
+
+  function bukaModalHapusAkun() {
+    setKonfirmasiHapus('');
+    setErrMsgHapus(null);
+    setModalHapusAkun(true);
+  }
+
+  async function submitHapusAkun() {
+    if (konfirmasiHapus !== init.active) {
+      setErrMsgHapus('Ketik ulang nama akun persis sama untuk konfirmasi.');
+      return;
+    }
+    setBusyHapus(true);
+    setErrMsgHapus(null);
+    const res = await hapusAkunWorkspace(init.active);
+    setBusyHapus(false);
+    if (!res.success) {
+      setErrMsgHapus(res.error || 'Terjadi kesalahan.');
+      return;
+    }
+    setModalHapusAkun(false);
+    await refetchAll();
   }
 
   return (
@@ -377,6 +406,71 @@ export function TopBar() {
             >
               <Plus size={14} strokeWidth={2.5} />
               <span>{busy ? 'Membuat...' : 'Buat Akun'}</span>
+            </motion.button>
+          </div>
+
+          {init.workspaces.length > 1 && (
+            <div className="pt-3 mt-1 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalAkunBaru(false);
+                  bukaModalHapusAkun();
+                }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700"
+              >
+                <Trash2 size={13} />
+                <span>Hapus akun &quot;{init.active}&quot; (akun yang sedang aktif)</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Modal Konfirmasi Hapus Akun / Workspace */}
+      <Modal open={modalHapusAkun} onClose={() => setModalHapusAkun(false)} title="Hapus Akun / Workspace">
+        <div className="space-y-4 pt-1">
+          <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl p-3">
+            <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-700 leading-relaxed">
+              Tindakan ini permanen dan tidak bisa dibatalkan. Seluruh <strong>rekening, kategori, anggaran,
+              transaksi, bukti transaksi, hutang/piutang, dan tabungan</strong> pada akun{' '}
+              <strong>&quot;{init.active}&quot;</strong> akan dihapus total.
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-700">
+              Ketik <span className="font-mono bg-slate-100 px-1 py-0.5 rounded">{init.active}</span> untuk konfirmasi
+            </label>
+            <input
+              value={konfirmasiHapus}
+              onChange={(e) => setKonfirmasiHapus(e.target.value)}
+              className="w-full border border-slate-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 rounded-xl px-3.5 py-2 text-sm mt-1.5 transition outline-none"
+              placeholder={init.active}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitHapusAkun();
+              }}
+            />
+          </div>
+          {errMsgHapus && <div className="text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">{errMsgHapus}</div>}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setModalHapusAkun(false)}
+              className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+            >
+              Batal
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={submitHapusAkun}
+              disabled={busyHapus || konfirmasiHapus !== init.active}
+              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm transition disabled:opacity-50"
+            >
+              <Trash2 size={14} strokeWidth={2.5} />
+              <span>{busyHapus ? 'Menghapus...' : 'Hapus Permanen'}</span>
             </motion.button>
           </div>
         </div>
