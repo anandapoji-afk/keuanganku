@@ -121,8 +121,12 @@ export default function TransaksiPage() {
   const [fileBaru, setFileBaru] = useState<File[]>([]);
   const [fileBaruUrls, setFileBaruUrls] = useState<string[]>([]);
   const [buktiLama, setBuktiLama] = useState<string[]>([]);
-  const [previewBuktiUrl, setPreviewBuktiUrl] = useState<string | null>(null);
-  const [previewBuktiTitle, setPreviewBuktiTitle] = useState('');
+  // Daftar url pada konteks yang sedang dibuka (riwayat / bukti lama / bukti baru)
+  // + index aktif di dalamnya — dipakai utk navigasi Berikutnya/Sebelumnya di lightbox.
+  const [previewBuktiDaftar, setPreviewBuktiDaftar] = useState<string[]>([]);
+  const [previewBuktiIndex, setPreviewBuktiIndex] = useState(0);
+  const [previewBuktiLabel, setPreviewBuktiLabel] = useState('');
+  const previewBuktiUrl = previewBuktiDaftar[previewBuktiIndex] ?? null;
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [presetPeriode, setPresetPeriode] = useState<PresetPeriode>('bulan');
@@ -252,15 +256,47 @@ export default function TransaksiPage() {
   // (misal user hapus/tambah file baru saat lightbox masih terbuka).
   useEffect(() => {
     if (previewBuktiUrl && previewBuktiUrl.startsWith('blob:') && !fileBaruUrls.includes(previewBuktiUrl)) {
-      setPreviewBuktiUrl(null);
+      setPreviewBuktiDaftar([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileBaruUrls]);
 
-  function bukaPreviewBukti(url: string, title?: string) {
-    setPreviewBuktiUrl(url);
-    setPreviewBuktiTitle(title || 'Bukti Transaksi');
+  // daftar = semua url pada konteks yang sama (array bukti 1 transaksi, atau
+  // buktiLama, atau fileBaruUrls) supaya Berikutnya/Sebelumnya bisa menyusurinya.
+  // label = prefix judul tanpa nomor urut, nomor urutnya dihitung otomatis dari index.
+  function bukaPreviewBukti(daftar: string[], index: number, label?: string) {
+    setPreviewBuktiDaftar(daftar);
+    setPreviewBuktiIndex(index);
+    setPreviewBuktiLabel(label || 'Bukti Transaksi');
   }
+
+  function tutupPreviewBukti() {
+    setPreviewBuktiDaftar([]);
+  }
+
+  function previewSebelumnya() {
+    setPreviewBuktiIndex((i) => (i - 1 + previewBuktiDaftar.length) % previewBuktiDaftar.length);
+  }
+
+  function previewBerikutnya() {
+    setPreviewBuktiIndex((i) => (i + 1) % previewBuktiDaftar.length);
+  }
+
+  // Navigasi keyboard di lightbox (desktop): kiri/kanan ganti bukti, Esc tutup.
+  useEffect(() => {
+    if (previewBuktiDaftar.length === 0) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft') previewSebelumnya();
+      else if (e.key === 'ArrowRight') previewBerikutnya();
+      else if (e.key === 'Escape') tutupPreviewBukti();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewBuktiDaftar.length]);
+
+  const previewBuktiTitle =
+    previewBuktiDaftar.length > 1 ? `${previewBuktiLabel} (${previewBuktiIndex + 1}/${previewBuktiDaftar.length})` : previewBuktiLabel;
 
   function hapusBuktiLama(index: number) {
     setBuktiLama((prev) => prev.filter((_, idx) => idx !== index));
@@ -551,7 +587,7 @@ export default function TransaksiPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        bukaPreviewBukti(url, `Bukti ${i + 1}/${t.bukti.length} · ${t.keterangan}`);
+                        bukaPreviewBukti(t.bukti || [], i, t.keterangan);
                       }}
                       className="relative group rounded-md border border-slate-200 overflow-hidden hover:ring-2 hover:ring-sky-400 transition"
                       title="Klik untuk melihat bukti transaksi"
@@ -574,7 +610,7 @@ export default function TransaksiPage() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      bukaPreviewBukti(t.bukti[0], `Bukti 1/${t.bukti.length} · ${t.keterangan}`);
+                      bukaPreviewBukti(t.bukti || [], 0, t.keterangan);
                     }}
                     className="text-[11px] text-sky-600 hover:text-sky-700 font-medium ml-1"
                   >
@@ -708,7 +744,7 @@ export default function TransaksiPage() {
                     <div key={i} className="relative group">
                       <button
                         type="button"
-                        onClick={() => bukaPreviewBukti(url, `Bukti Tersimpan ${i + 1}`)}
+                        onClick={() => bukaPreviewBukti(buktiLama, i, 'Bukti Tersimpan')}
                         className="block rounded-lg overflow-hidden border-2 border-slate-200 hover:border-sky-400 focus:outline-none transition shadow-sm"
                         title="Klik untuk melihat ukuran penuh"
                       >
@@ -753,7 +789,7 @@ export default function TransaksiPage() {
                       <div key={i} className="relative group">
                         <button
                           type="button"
-                          onClick={() => objectUrl && bukaPreviewBukti(objectUrl, `Bukti Baru: ${file.name}`)}
+                          onClick={() => objectUrl && bukaPreviewBukti(fileBaruUrls, i, 'Bukti Baru')}
                           className="block rounded-lg overflow-hidden border-2 border-emerald-300 hover:border-emerald-500 focus:outline-none transition shadow-sm"
                           title="Klik untuk melihat preview"
                         >
@@ -797,9 +833,9 @@ export default function TransaksiPage() {
       </Modal>
 
       {/* Modal Preview Bukti Penuh (Lightbox) */}
-      <Modal open={!!previewBuktiUrl} onClose={() => setPreviewBuktiUrl(null)} title={previewBuktiTitle || 'Preview Bukti Transaksi'}>
+      <Modal open={!!previewBuktiUrl} onClose={tutupPreviewBukti} title={previewBuktiTitle || 'Preview Bukti Transaksi'}>
         <div className="space-y-3">
-          <div className="bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-3 min-h-[260px] max-h-[70vh]">
+          <div className="relative bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-3 min-h-[260px] max-h-[70vh]">
             {previewBuktiUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -811,7 +847,46 @@ export default function TransaksiPage() {
                 }}
               />
             )}
+
+            {previewBuktiDaftar.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={previewSebelumnya}
+                  aria-label="Bukti sebelumnya"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center text-lg transition"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={previewBerikutnya}
+                  aria-label="Bukti berikutnya"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center text-lg transition"
+                >
+                  ›
+                </button>
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-white bg-black/50 px-2 py-0.5 rounded-full">
+                  {previewBuktiIndex + 1} / {previewBuktiDaftar.length}
+                </div>
+              </>
+            )}
           </div>
+
+          {previewBuktiDaftar.length > 1 && (
+            <div className="flex items-center justify-center gap-1.5">
+              {previewBuktiDaftar.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Lihat bukti ${i + 1}`}
+                  onClick={() => setPreviewBuktiIndex(i)}
+                  className={`w-1.5 h-1.5 rounded-full transition ${i === previewBuktiIndex ? 'bg-sky-600 w-4' : 'bg-slate-300'}`}
+                />
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
             <a
               href={previewBuktiUrl || '#'}
@@ -828,8 +903,14 @@ export default function TransaksiPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setBuktiLama((prev) => prev.filter((u) => u !== previewBuktiUrl));
-                    setPreviewBuktiUrl(null);
+                    const urlDihapus = previewBuktiUrl;
+                    setBuktiLama((prev) => prev.filter((u) => u !== urlDihapus));
+                    if (previewBuktiDaftar.length <= 1) {
+                      tutupPreviewBukti();
+                    } else {
+                      setPreviewBuktiDaftar((prev) => prev.filter((u) => u !== urlDihapus));
+                      setPreviewBuktiIndex((i) => Math.min(i, previewBuktiDaftar.length - 2));
+                    }
                   }}
                   className="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold px-3 py-1.5 rounded-lg transition"
                 >
@@ -839,7 +920,7 @@ export default function TransaksiPage() {
 
               <button
                 type="button"
-                onClick={() => setPreviewBuktiUrl(null)}
+                onClick={tutupPreviewBukti}
                 className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-1.5 rounded-lg font-medium transition"
               >
                 Tutup
