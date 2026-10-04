@@ -506,6 +506,11 @@ export default function TransaksiPage() {
                       {t.status_bayar === 'DP' ? ' \u00b7 DP' : ''}
                     </span>
                   </div>
+                  {t.pihak_terkait && (
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Pihak: <span className="font-medium text-slate-600">{t.pihak_terkait}</span>
+                    </div>
+                  )}
                   {t.catatan && <div className="text-[11px] text-amber-600 mt-0.5">{t.catatan}</div>}
                 </button>
                 <div className="text-right shrink-0">
