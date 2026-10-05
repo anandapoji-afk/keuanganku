@@ -11,10 +11,71 @@ import type { SimpanTransaksiPayload, Transaction, Tipe, StatusBayar, WarnaHighl
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    // Jika file bukan gambar, lewati proses resize dan gunakan FileReader bawaan
+    if (!file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl); // Bebaskan memori browser
+
+      // Tentukan batas maksimal resolusi (1280px cukup tajam untuk struk namun sangat ringan)
+      const MAX_WIDTH = 1280;
+      const MAX_HEIGHT = 1280;
+      let width = img.width;
+      let height = img.height;
+
+      // Hitung dimensi baru sambil mempertahankan rasio aspek
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width = Math.round((width * MAX_HEIGHT) / height);
+          height = MAX_HEIGHT;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Gagal memuat canvas context'));
+        return;
+      }
+
+      // Gambar ulang file dengan ukuran yang sudah disesuaikan
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Kompresi ke JPEG dengan kualitas 80% (kecuali untuk PNG agar transparansi aman)
+      const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const quality = 0.8;
+
+      const dataUrl = canvas.toDataURL(mimeType, quality);
+      resolve(dataUrl.split(',')[1]); // Ambil string base64 mentahnya saja
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      // Fallback ke FileReader jika gambar gagal dimuat (misal format tidak dikenali DOM)
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    };
+
+    img.src = objectUrl;
   });
 }
 
