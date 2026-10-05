@@ -6,7 +6,7 @@ import { resolveWorkspaceId } from './workspace';
 import { formatTanggalIndo } from '@/lib/utils';
 import { ringkasPerKategori } from '@/lib/report/ringkas';
 import { hitungDaftarHutangDariGrid, hitungDaftarHutangPiutangDariGrid } from '@/lib/report/hutang';
-import type { Transaction } from '@/lib/types';
+import type { Transaction, LaporanFilterOptions } from '@/lib/types';
 
 export interface LaporanFileResult {
   data: string; // base64
@@ -15,46 +15,90 @@ export interface LaporanFileResult {
 }
 export type LaporanResult = LaporanFileResult | { error: string };
 
-async function ambilTransaksiRange(
-  ws: string,
-  startDateStr: string,
-  endDateStr: string
-): Promise<{ transaksi: Transaction[]; sDate: Date; eDate: Date; wsId: string } | { error: string }> {
-  const { supabase, user } = await requireUser();
-  const wsId = await resolveWorkspaceId(supabase, user.id, ws);
-  if (!wsId) return { error: 'Data akun tidak ditemukan!' };
+function parseFilterParams(
+  startDateOrOptions?: string | LaporanFilterOptions,
+  endDateStr?: string,
+  extraOptions?: LaporanFilterOptions
+): {
+  sDate: Date | null;
+  eDate: Date | null;
+  filter: LaporanFilterOptions;
+  teksPeriode: string;
+} {
+  let filter: LaporanFilterOptions = {};
+  if (typeof startDateOrOptions === 'object' && startDateOrOptions !== null) {
+    filter = { ...startDateOrOptions };
+  } else {
+    filter = {
+      startDate: startDateOrOptions || '',
+      endDate: endDateStr || '',
+      ...(extraOptions || {}),
+    };
+  }
 
-  const { data: transaksi } = await supabase.from('transactions').select('*').eq('workspace_id', wsId);
+  let sDate: Date | null = null;
+  let eDate: Date | null = null;
 
-  const sDate = new Date(startDateStr);
-  sDate.setHours(0, 0, 0, 0);
-  const eDate = new Date(endDateStr);
-  eDate.setHours(23, 59, 59, 999);
+  if (filter.startDate) {
+    sDate = new Date(filter.startDate);
+    sDate.setHours(0, 0, 0, 0);
+  }
+  if (filter.endDate) {
+    eDate = new Date(filter.endDate);
+    eDate.setHours(23, 59, 59, 999);
+  }
 
-  return { transaksi: (transaksi || []) as Transaction[], sDate, eDate, wsId };
+  let teksPeriode = 'Semua Riwayat';
+  if (filter.startDate && filter.endDate) {
+    if (filter.startDate === filter.endDate) {
+      teksPeriode = formatTanggalIndo(filter.startDate);
+    } else {
+      teksPeriode = `${formatTanggalIndo(filter.startDate)} s/d ${formatTanggalIndo(filter.endDate)}`;
+    }
+  } else if (filter.tanggal) {
+    teksPeriode = formatTanggalIndo(filter.tanggal);
+  } else if (filter.bulan) {
+    const [y, m] = filter.bulan.split('-');
+    const dateObj = new Date(Number(y), Number(m) - 1, 1);
+    const namaBulan = dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    teksPeriode = `Bulan ${namaBulan}`;
+  } else if (filter.tahun) {
+    teksPeriode = `Tahun ${filter.tahun}`;
+  } else if (filter.startDate) {
+    teksPeriode = `Mulai ${formatTanggalIndo(filter.startDate)}`;
+  } else if (filter.endDate) {
+    teksPeriode = `Sampai ${formatTanggalIndo(filter.endDate)}`;
+  }
+
+  return { sDate, eDate, filter, teksPeriode };
 }
 
 // Padanan downloadLaporanBase64(ws, startDateStr, endDateStr, format='xlsx')
 export async function generateLaporanExcelRingkas(
   ws: string,
-  startDateStr: string,
-  endDateStr: string
+  startDateOrOptions?: string | LaporanFilterOptions,
+  endDateStr?: string,
+  extraFilter?: LaporanFilterOptions
 ): Promise<LaporanResult> {
   try {
-    const ctx = await ambilTransaksiRange(ws, startDateStr, endDateStr);
-    if ('error' in ctx) return ctx;
-    const { transaksi, sDate, eDate } = ctx;
+    const { sDate, eDate, filter, teksPeriode } = parseFilterParams(startDateOrOptions, endDateStr, extraFilter);
+    const { supabase, user } = await requireUser();
+    const wsId = await resolveWorkspaceId(supabase, user.id, ws);
+    if (!wsId) return { error: 'Data akun tidak ditemukan!' };
+
+    const { data: transRows } = await supabase.from('transactions').select('*').eq('workspace_id', wsId);
+    const transaksi = (transRows || []) as Transaction[];
 
     const { listMasuk, listKeluar, subMasuk, subKeluar, totalMasuk, totalKeluar } = ringkasPerKategori(
       transaksi,
       sDate,
-      eDate
+      eDate,
+      filter
     );
     const saldoAkhir = totalMasuk - totalKeluar;
-    const teksPeriode = `${formatTanggalIndo(startDateStr)} s/d ${formatTanggalIndo(endDateStr)}`;
 
-    const hutangList = hitungDaftarHutangDariGrid(transaksi, sDate, eDate);
-    const hpList = hitungDaftarHutangPiutangDariGrid(transaksi, sDate, eDate);
+    const hutangList = hitungDaftarHutangDariGrid(transaksi, sDate, eDate, filter);
+    const hpList = hitungDaftarHutangPiutangDariGrid(transaksi, sDate, eDate, filter);
 
     const wb = new ExcelJS.Workbook();
     const sheet = wb.addWorksheet('Laporan');
@@ -65,6 +109,12 @@ export async function generateLaporanExcelRingkas(
     rows.push(['LAPORAN KEUANGAN', '']);
     rows.push(['Nama Akun / Workspace', ws]);
     rows.push(['Periode Laporan', teksPeriode]);
+
+    if (filter.tipe && filter.tipe !== 'Semua') rows.push(['Filter Tipe', filter.tipe]);
+    if (filter.kategori) rows.push(['Filter Kategori', filter.kategori]);
+    if (filter.rekening) rows.push(['Filter Rekening', filter.rekening]);
+    if (filter.search) rows.push(['Filter Kata Kunci', filter.search]);
+
     rows.push(['', '']);
 
     rows.push(['PEMASUKAN', '']);
@@ -184,7 +234,8 @@ export async function generateLaporanExcelRingkas(
       });
     };
 
-    mergeHeaderBg(5, 'FF10B981');
+    const headerMasukIdx = rows.findIndex((r) => r[0] === 'PEMASUKAN') + 1;
+    if (headerMasukIdx > 0) mergeHeaderBg(headerMasukIdx, 'FF10B981');
     totalRowBg(totalMIdx, 'FFD1FAE5', 'FF047857');
     mergeHeaderBg(idxK, 'FFEF4444');
     totalRowBg(totalKIdx, 'FFFEE2E2', 'FFB91C1C');
@@ -204,7 +255,8 @@ export async function generateLaporanExcelRingkas(
     }
 
     const buf = await wb.xlsx.writeBuffer();
-    const namaFile = `Laporan_${ws.replace(/ /g, '_')}_${startDateStr}_sd_${endDateStr}.xlsx`;
+    const cleanPeriod = teksPeriode.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const namaFile = `Laporan_${ws.replace(/ /g, '_')}_${cleanPeriod}.xlsx`;
 
     return {
       data: Buffer.from(buf).toString('base64'),
@@ -215,5 +267,3 @@ export async function generateLaporanExcelRingkas(
     return { error: String(e) };
   }
 }
-
-export { ambilTransaksiRange };

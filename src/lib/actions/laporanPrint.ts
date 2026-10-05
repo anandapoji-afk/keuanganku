@@ -5,7 +5,7 @@ import { resolveWorkspaceId } from './workspace';
 import { formatTanggalIndo } from '@/lib/utils';
 import { siapkanItemLaporan, kelompokkan, urutanKategori, type HasilKelompokkan } from '@/lib/report/kelompokkan';
 import { hitungDaftarHutangDariGrid, hitungDaftarHutangPiutangDariGrid, hitungNetHutangPiutangDariGrid } from '@/lib/report/hutang';
-import type { HutangDPItem, HutangPiutangItem, JenisLaporan, Transaction } from '@/lib/types';
+import type { HutangDPItem, HutangPiutangItem, JenisLaporan, Transaction, LaporanFilterOptions } from '@/lib/types';
 
 export interface LampiranBuktiItem {
   tglTampil: string;
@@ -16,10 +16,16 @@ export interface LampiranBuktiItem {
   bukti: string[];
 }
 
+export interface FilterBadgeItem {
+  label: string;
+  value: string;
+}
+
 export interface DataLaporanPrint {
   ws: string;
   jenis: JenisLaporan;
   teksPeriode: string;
+  filterBadges: FilterBadgeItem[];
   pemasukan: HasilKelompokkan;
   pengeluaran: HasilKelompokkan;
   saldoBersih: number;
@@ -30,20 +36,99 @@ export interface DataLaporanPrint {
   error?: string;
 }
 
+function parseFilterParams(
+  startDateOrOptions?: string | LaporanFilterOptions,
+  endDateStr?: string,
+  extraOptions?: LaporanFilterOptions
+): {
+  sDate: Date | null;
+  eDate: Date | null;
+  filter: LaporanFilterOptions;
+  teksPeriode: string;
+  filterBadges: FilterBadgeItem[];
+} {
+  let filter: LaporanFilterOptions = {};
+  if (typeof startDateOrOptions === 'object' && startDateOrOptions !== null) {
+    filter = { ...startDateOrOptions };
+  } else {
+    filter = {
+      startDate: startDateOrOptions || '',
+      endDate: endDateStr || '',
+      ...(extraOptions || {}),
+    };
+  }
+
+  let sDate: Date | null = null;
+  let eDate: Date | null = null;
+
+  if (filter.startDate) {
+    sDate = new Date(filter.startDate);
+    sDate.setHours(0, 0, 0, 0);
+  }
+  if (filter.endDate) {
+    eDate = new Date(filter.endDate);
+    eDate.setHours(23, 59, 59, 999);
+  }
+
+  let teksPeriode = 'Semua Riwayat';
+  if (filter.startDate && filter.endDate) {
+    if (filter.startDate === filter.endDate) {
+      teksPeriode = formatTanggalIndo(filter.startDate);
+    } else {
+      teksPeriode = `${formatTanggalIndo(filter.startDate)} s/d ${formatTanggalIndo(filter.endDate)}`;
+    }
+  } else if (filter.tanggal) {
+    teksPeriode = formatTanggalIndo(filter.tanggal);
+  } else if (filter.bulan) {
+    const [y, m] = filter.bulan.split('-');
+    const dateObj = new Date(Number(y), Number(m) - 1, 1);
+    const namaBulan = dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    teksPeriode = `Bulan ${namaBulan}`;
+  } else if (filter.tahun) {
+    teksPeriode = `Tahun ${filter.tahun}`;
+  } else if (filter.startDate) {
+    teksPeriode = `Mulai ${formatTanggalIndo(filter.startDate)}`;
+  } else if (filter.endDate) {
+    teksPeriode = `Sampai ${formatTanggalIndo(filter.endDate)}`;
+  }
+
+  const filterBadges: FilterBadgeItem[] = [];
+  if (filter.tipe && filter.tipe !== 'Semua') {
+    filterBadges.push({ label: 'Tipe', value: filter.tipe });
+  }
+  if (filter.kategori) {
+    filterBadges.push({ label: 'Kategori', value: filter.kategori });
+  }
+  if (filter.rekening) {
+    filterBadges.push({ label: 'Rekening', value: filter.rekening });
+  }
+  if (filter.warna && filter.warna !== 'Semua') {
+    filterBadges.push({ label: 'Highlight', value: filter.warna });
+  }
+  if (filter.search) {
+    filterBadges.push({ label: 'Pencarian', value: `"${filter.search}"` });
+  }
+
+  return { sDate, eDate, filter, teksPeriode, filterBadges };
+}
+
 // Padanan pengumpulan data di downloadLaporanPDF + awal buatHtmlLaporan
-// (sebelum tahap render string HTML — di Next.js tahap render dilakukan
-// oleh JSX di src/app/reports/print/page.tsx).
+// Mendukung filter rentang tanggal maupun filter dinamis transaksi (kategori, rekening, tipe, keyword).
 export async function ambilDataLaporanPrint(
   ws: string,
-  startDateStr: string,
-  endDateStr: string,
-  jenis: JenisLaporan,
-  sertakanBukti: boolean
+  startDateOrOptions: string | LaporanFilterOptions,
+  endDateStr: string = '',
+  jenis: JenisLaporan = 'detail',
+  sertakanBukti: boolean = false,
+  extraFilter?: LaporanFilterOptions
 ): Promise<DataLaporanPrint> {
+  const { sDate, eDate, filter, teksPeriode, filterBadges } = parseFilterParams(startDateOrOptions, endDateStr, extraFilter);
+
   const kosong: DataLaporanPrint = {
     ws,
     jenis,
-    teksPeriode: '',
+    teksPeriode,
+    filterBadges,
     pemasukan: { grup: [], total: 0 },
     pengeluaran: { grup: [], total: 0 },
     saldoBersih: 0,
@@ -66,24 +151,17 @@ export async function ambilDataLaporanPrint(
       (katRows || []) as { tipe: 'Pemasukan' | 'Pengeluaran'; nama: string }[]
     );
 
-    const sDate = new Date(startDateStr);
-    sDate.setHours(0, 0, 0, 0);
-    const eDate = new Date(endDateStr);
-    eDate.setHours(23, 59, 59, 999);
-
-    const dataAll = siapkanItemLaporan(transaksi, sDate, eDate);
+    const dataAll = siapkanItemLaporan(transaksi, sDate, eDate, filter);
     const pemasukan = kelompokkan(dataAll, 'Pemasukan', urutanMasuk);
     const pengeluaran = kelompokkan(dataAll, 'Pengeluaran', urutanKeluar);
 
-    const netHP = hitungNetHutangPiutangDariGrid(transaksi, sDate, eDate);
+    const netHP = hitungNetHutangPiutangDariGrid(transaksi, sDate, eDate, filter);
     const saldoBersih = pemasukan.total + netHP.masuk - (pengeluaran.total + netHP.keluar);
 
-    const hutangList = hitungDaftarHutangDariGrid(transaksi, sDate, eDate);
-    const hpList = hitungDaftarHutangPiutangDariGrid(transaksi, sDate, eDate);
+    const hutangList = hitungDaftarHutangDariGrid(transaksi, sDate, eDate, filter);
+    const hpList = hitungDaftarHutangPiutangDariGrid(transaksi, sDate, eDate, filter);
 
     // Padanan daftarLampiranBukti yang dikumpulkan baris() saat jenis 'detail'
-    // (lihat catatan di Kode.gs) — MAKS_BUKTI_PER_HALAMAN diterapkan saat
-    // render (lihat page.tsx), di sini cukup kumpulkan urut kronologis.
     const lampiranBukti: LampiranBuktiItem[] = [];
     if (jenis === 'detail' && sertakanBukti) {
       dataAll
@@ -104,7 +182,8 @@ export async function ambilDataLaporanPrint(
     return {
       ws,
       jenis,
-      teksPeriode: `${formatTanggalIndo(startDateStr)} s/d ${formatTanggalIndo(endDateStr)}`,
+      teksPeriode,
+      filterBadges,
       pemasukan,
       pengeluaran,
       saldoBersih,

@@ -6,7 +6,7 @@ import { resolveWorkspaceId } from './workspace';
 import { formatTanggalIndo, warnaHighlightHex } from '@/lib/utils';
 import { siapkanItemLaporan, kelompokkan, urutanKategori, type ItemLaporan, type GrupKategori } from '@/lib/report/kelompokkan';
 import { hitungDaftarHutangDariGrid, hitungDaftarHutangPiutangDariGrid, hitungNetHutangPiutangDariGrid } from '@/lib/report/hutang';
-import type { Transaction } from '@/lib/types';
+import type { Transaction, LaporanFilterOptions } from '@/lib/types';
 import type { LaporanResult } from './laporanRingkas';
 
 const ARGB = {
@@ -21,13 +21,73 @@ const ARGB = {
 
 type RowVal = string | number;
 
+function parseFilterParams(
+  startDateOrOptions?: string | LaporanFilterOptions,
+  endDateStr?: string,
+  extraOptions?: LaporanFilterOptions
+): {
+  sDate: Date | null;
+  eDate: Date | null;
+  filter: LaporanFilterOptions;
+  teksPeriode: string;
+} {
+  let filter: LaporanFilterOptions = {};
+  if (typeof startDateOrOptions === 'object' && startDateOrOptions !== null) {
+    filter = { ...startDateOrOptions };
+  } else {
+    filter = {
+      startDate: startDateOrOptions || '',
+      endDate: endDateStr || '',
+      ...(extraOptions || {}),
+    };
+  }
+
+  let sDate: Date | null = null;
+  let eDate: Date | null = null;
+
+  if (filter.startDate) {
+    sDate = new Date(filter.startDate);
+    sDate.setHours(0, 0, 0, 0);
+  }
+  if (filter.endDate) {
+    eDate = new Date(filter.endDate);
+    eDate.setHours(23, 59, 59, 999);
+  }
+
+  let teksPeriode = 'Semua Riwayat';
+  if (filter.startDate && filter.endDate) {
+    if (filter.startDate === filter.endDate) {
+      teksPeriode = formatTanggalIndo(filter.startDate);
+    } else {
+      teksPeriode = `${formatTanggalIndo(filter.startDate)} s/d ${formatTanggalIndo(filter.endDate)}`;
+    }
+  } else if (filter.tanggal) {
+    teksPeriode = formatTanggalIndo(filter.tanggal);
+  } else if (filter.bulan) {
+    const [y, m] = filter.bulan.split('-');
+    const dateObj = new Date(Number(y), Number(m) - 1, 1);
+    const namaBulan = dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    teksPeriode = `Bulan ${namaBulan}`;
+  } else if (filter.tahun) {
+    teksPeriode = `Tahun ${filter.tahun}`;
+  } else if (filter.startDate) {
+    teksPeriode = `Mulai ${formatTanggalIndo(filter.startDate)}`;
+  } else if (filter.endDate) {
+    teksPeriode = `Sampai ${formatTanggalIndo(filter.endDate)}`;
+  }
+
+  return { sDate, eDate, filter, teksPeriode };
+}
+
 // Padanan downloadLaporanExcelDetail(ws, startDateStr, endDateStr)
 export async function generateLaporanExcelDetail(
   ws: string,
-  startDateStr: string,
-  endDateStr: string
+  startDateOrOptions?: string | LaporanFilterOptions,
+  endDateStr?: string,
+  extraFilter?: LaporanFilterOptions
 ): Promise<LaporanResult> {
   try {
+    const { sDate, eDate, filter, teksPeriode } = parseFilterParams(startDateOrOptions, endDateStr, extraFilter);
     const { supabase, user } = await requireUser();
     const wsId = await resolveWorkspaceId(supabase, user.id, ws);
     if (!wsId) return { error: 'Data akun tidak ditemukan!' };
@@ -38,20 +98,15 @@ export async function generateLaporanExcelDetail(
     const { data: katRows } = await supabase.from('categories').select('tipe, nama').eq('workspace_id', wsId);
     const { urutanMasuk, urutanKeluar } = urutanKategori((katRows || []) as { tipe: 'Pemasukan' | 'Pengeluaran'; nama: string }[]);
 
-    const sDate = new Date(startDateStr);
-    sDate.setHours(0, 0, 0, 0);
-    const eDate = new Date(endDateStr);
-    eDate.setHours(23, 59, 59, 999);
-
-    const dataAll = siapkanItemLaporan(transaksi, sDate, eDate);
+    const dataAll = siapkanItemLaporan(transaksi, sDate, eDate, filter);
     const pemasukan = kelompokkan(dataAll, 'Pemasukan', urutanMasuk);
     const pengeluaran = kelompokkan(dataAll, 'Pengeluaran', urutanKeluar);
 
-    const netHP = hitungNetHutangPiutangDariGrid(transaksi, sDate, eDate);
+    const netHP = hitungNetHutangPiutangDariGrid(transaksi, sDate, eDate, filter);
     const saldoBersih = pemasukan.total + netHP.masuk - (pengeluaran.total + netHP.keluar);
 
-    const hutangList = hitungDaftarHutangDariGrid(transaksi, sDate, eDate);
-    const hpList = hitungDaftarHutangPiutangDariGrid(transaksi, sDate, eDate);
+    const hutangList = hitungDaftarHutangDariGrid(transaksi, sDate, eDate, filter);
+    const hpList = hitungDaftarHutangPiutangDariGrid(transaksi, sDate, eDate, filter);
 
     const wb = new ExcelJS.Workbook();
     const sheet = wb.addWorksheet('Laporan Detail');
@@ -108,7 +163,13 @@ export async function generateLaporanExcelDetail(
 
     pushRow(['LAPORAN KEUANGAN DETAIL TRANSAKSI', '', '', '']);
     pushRow(['Nama Akun / Workspace', ws, '', '']);
-    pushRow(['Periode Laporan', `${formatTanggalIndo(startDateStr)} s/d ${formatTanggalIndo(endDateStr)}`, '', '']);
+    pushRow(['Periode Laporan', teksPeriode, '', '']);
+
+    if (filter.tipe && filter.tipe !== 'Semua') pushRow(['Filter Tipe', filter.tipe, '', '']);
+    if (filter.kategori) pushRow(['Filter Kategori', filter.kategori, '', '']);
+    if (filter.rekening) pushRow(['Filter Rekening', filter.rekening, '', '']);
+    if (filter.search) pushRow(['Filter Kata Kunci', filter.search, '', '']);
+
     pushRow(['', '', '', '']);
 
     greenHeaderRows.push(pushRow(['PEMASUKAN', '', '', '']));
@@ -226,8 +287,7 @@ export async function generateLaporanExcelDetail(
       });
     });
 
-    // Rich text kolom B: bagian "(Ke:/Dari: ...)" diwarnai biru bold, padanan
-    // RichTextValue di GAS lama.
+    // Rich text kolom B: bagian "(Ke:/Dari: ...)" diwarnai biru bold
     richKetRows.forEach(({ row, ketPlain, pihakSuffix }) => {
       sheet.getCell(`B${row}`).value = {
         richText: [
@@ -259,7 +319,8 @@ export async function generateLaporanExcelDetail(
     }
 
     const buf = await wb.xlsx.writeBuffer();
-    const namaFile = `Laporan_Detail_${ws.replace(/ /g, '_')}_${startDateStr}_sd_${endDateStr}.xlsx`;
+    const cleanPeriod = teksPeriode.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const namaFile = `Laporan_Detail_${ws.replace(/ /g, '_')}_${cleanPeriod}.xlsx`;
 
     return {
       data: Buffer.from(buf).toString('base64'),

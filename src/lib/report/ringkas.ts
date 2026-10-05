@@ -1,4 +1,5 @@
-import type { Transaction } from '@/lib/types';
+import type { Transaction, LaporanFilterOptions } from '@/lib/types';
+import { matchesTransaksiFilter } from './kelompokkan';
 
 export interface RingkasHasil {
   listMasuk: Record<string, number>;
@@ -14,7 +15,12 @@ export interface RingkasHasil {
 // tapi nominalnya tetap masuk ke Total Pemasukan/Pengeluaran (Piutang mengurangi
 // Saldo Bersih, Hutang menambah — karena Piutang dicatat sbg Pengeluaran & Hutang
 // sbg Pemasukan pada baris Pokok-nya).
-export function ringkasPerKategori(transaksi: Transaction[], sDate: Date, eDate: Date): RingkasHasil {
+export function ringkasPerKategori(
+  transaksi: Transaction[],
+  sDate?: Date | null,
+  eDate?: Date | null,
+  filter?: LaporanFilterOptions | null
+): RingkasHasil {
   const listMasuk: Record<string, number> = {};
   const listKeluar: Record<string, number> = {};
   const subMasuk: Record<string, Record<string, number>> = {};
@@ -25,8 +31,15 @@ export function ringkasPerKategori(transaksi: Transaction[], sDate: Date, eDate:
   transaksi.forEach((row) => {
     const kat = row.kategori;
     if (kat === 'Transfer' || kat === 'Tabungan') return;
-    const tgl = new Date(row.tanggal);
-    if (tgl < sDate || tgl > eDate) return;
+    if (sDate) {
+      const tgl = new Date(row.tanggal);
+      if (tgl < sDate) return;
+    }
+    if (eDate) {
+      const tgl = new Date(row.tanggal);
+      if (tgl > eDate) return;
+    }
+    if (filter && !matchesTransaksiFilter(row, filter)) return;
 
     const tipe = row.tipe;
     const nom = parseFloat(String(row.nominal)) || 0;

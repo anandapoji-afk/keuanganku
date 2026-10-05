@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'motion/react';
-import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
+import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer } from 'lucide-react';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
 import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex } from '@/lib/utils';
@@ -582,7 +583,17 @@ export default function TransaksiPage() {
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-slate-400">{listUrut.length} transaksi</span>
-        <SortMenu aturan={aturanSort} onTerapkan={setAturanSort} />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/laporan"
+            className="flex items-center gap-1 text-[11px] text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 font-semibold px-2 py-1 rounded-lg transition active:scale-95"
+            title="Cetak atau unduh laporan dari hasil filter ini"
+          >
+            <Printer size={12} />
+            <span>Cetak Laporan</span>
+          </Link>
+          <SortMenu aturan={aturanSort} onTerapkan={setAturanSort} />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">

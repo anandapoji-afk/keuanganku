@@ -1,5 +1,46 @@
-import type { Transaction, Tipe } from '@/lib/types';
+import type { Transaction, Tipe, LaporanFilterOptions } from '@/lib/types';
 import { formatTanggalIndo } from '@/lib/utils';
+
+export function matchesTransaksiFilter(row: Transaction, filter?: LaporanFilterOptions | null): boolean {
+  if (!filter) return true;
+
+  if (filter.search) {
+    const text = filter.search.trim().toLowerCase();
+    if (text) {
+      const haystack = [
+        row.keterangan,
+        row.kategori,
+        row.sub_kategori,
+        row.rekening,
+        row.pihak_terkait,
+        row.catatan,
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      if (!haystack.includes(text)) return false;
+    }
+  }
+
+  if (filter.tipe && filter.tipe !== 'Semua' && row.tipe !== filter.tipe) return false;
+  if (filter.warna && filter.warna !== 'Semua' && row.warna_highlight !== filter.warna) return false;
+  if (filter.rekening && row.rekening !== filter.rekening) return false;
+  if (filter.kategori && row.kategori !== filter.kategori) return false;
+  if (filter.tanggal && row.tanggal !== filter.tanggal) return false;
+  if (filter.bulan) {
+    const [y, m] = filter.bulan.split('-');
+    const tgl = new Date(`${row.tanggal}T00:00:00`);
+    if (String(tgl.getFullYear()) !== y || String(tgl.getMonth() + 1).padStart(2, '0') !== m) return false;
+  }
+  if (filter.tahun) {
+    const tgl = new Date(`${row.tanggal}T00:00:00`);
+    if (String(tgl.getFullYear()) !== filter.tahun) return false;
+  }
+  if (filter.startDate && new Date(`${row.tanggal}T00:00:00`) < new Date(`${filter.startDate}T00:00:00`)) return false;
+  if (filter.endDate && new Date(`${row.tanggal}T00:00:00`) > new Date(`${filter.endDate}T23:59:59`)) return false;
+
+  return true;
+}
 
 export interface ItemLaporan {
   tglTampil: string;
@@ -33,12 +74,24 @@ export interface HasilKelompokkan {
 }
 
 // Padanan filter dataAll di downloadLaporanPDF/downloadLaporanExcelDetail:
-// exclude Transfer/Hutang/Piutang/Tabungan, filter rentang tanggal [sDate,eDate].
-export function siapkanItemLaporan(transaksi: Transaction[], sDate: Date, eDate: Date): ItemLaporan[] {
+// exclude Transfer/Hutang/Piutang/Tabungan, filter rentang tanggal [sDate,eDate] atau filter custom.
+export function siapkanItemLaporan(
+  transaksi: Transaction[],
+  sDate?: Date | null,
+  eDate?: Date | null,
+  filter?: LaporanFilterOptions | null
+): ItemLaporan[] {
   const out: ItemLaporan[] = [];
   transaksi.forEach((row) => {
-    const tgl = new Date(row.tanggal);
-    if (tgl < sDate || tgl > eDate) return;
+    if (sDate) {
+      const tgl = new Date(row.tanggal);
+      if (tgl < sDate) return;
+    }
+    if (eDate) {
+      const tgl = new Date(row.tanggal);
+      if (tgl > eDate) return;
+    }
+    if (filter && !matchesTransaksiFilter(row, filter)) return;
     if (['Transfer', 'Hutang', 'Piutang', 'Tabungan'].includes(row.kategori)) return;
     out.push({
       tglTampil: formatTanggalIndo(row.tanggal),

@@ -11,6 +11,19 @@ export type PerananHP = 'Pokok' | 'Pembayaran' | '';
 export type JenisLaporan = 'ringkas' | 'detail';
 export type WarnaHighlight = '' | 'kuning' | 'hijau' | 'pink' | 'biru' | 'oranye' | 'ungu';
 
+export interface LaporanFilterOptions {
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  tipe?: 'Semua' | Tipe | string;
+  kategori?: string;
+  rekening?: string;
+  warna?: 'Semua' | WarnaHighlight | string;
+  tanggal?: string;
+  bulan?: string;
+  tahun?: string;
+}
+
 export interface Workspace {
   id: string;
   user_id: string;

@@ -2,7 +2,7 @@ import { ambilDataLaporanPrint } from '@/lib/actions/laporanPrint';
 import { rp, pct, warnaHighlightHex } from '@/lib/utils';
 import TombolCetak from './TombolCetak';
 import type { GrupKategori } from '@/lib/report/kelompokkan';
-import type { JenisLaporan } from '@/lib/types';
+import type { JenisLaporan, LaporanFilterOptions } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +13,14 @@ interface Props {
     end?: string;
     jenis?: string;
     bukti?: string;
+    search?: string;
+    tipe?: string;
+    kategori?: string;
+    rekening?: string;
+    warna?: string;
+    tanggal?: string;
+    bulan?: string;
+    tahun?: string;
   };
 }
 
@@ -25,7 +33,20 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
   const jenis: JenisLaporan = searchParams.jenis === 'ringkas' ? 'ringkas' : 'detail';
   const sertakanBukti = searchParams.bukti === '1';
 
-  const data = await ambilDataLaporanPrint(ws, start, end, jenis, sertakanBukti);
+  const filterOptions: LaporanFilterOptions = {
+    startDate: start,
+    endDate: end,
+    search: searchParams.search || '',
+    tipe: searchParams.tipe || 'Semua',
+    kategori: searchParams.kategori || '',
+    rekening: searchParams.rekening || '',
+    warna: (searchParams.warna as any) || 'Semua',
+    tanggal: searchParams.tanggal || '',
+    bulan: searchParams.bulan || '',
+    tahun: searchParams.tahun || '',
+  };
+
+  const data = await ambilDataLaporanPrint(ws, filterOptions, '', jenis, sertakanBukti);
 
   if (data.error) {
     return <div className="p-8 text-red-600">Gagal memuat laporan: {data.error}</div>;
@@ -129,8 +150,19 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
         <div className="flex justify-between items-start border-b-2 border-slate-800 pb-3 mb-4">
           <div>
             <div className="text-lg font-bold">LAPORAN KEUANGAN{jenis === 'detail' ? ' DETAIL TRANSAKSI' : ''}</div>
-            <div className="text-xs text-slate-500 mt-1">Akun: {data.ws}</div>
-            <div className="text-xs text-slate-500">Periode: {data.teksPeriode}</div>
+            <div className="text-xs text-slate-500 mt-1">Akun: <strong>{data.ws}</strong></div>
+            <div className="text-xs text-slate-500">Periode: <strong>{data.teksPeriode}</strong></div>
+            {data.filterBadges.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase self-center mr-0.5">Filter:</span>
+                {data.filterBadges.map((b, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 text-[10.5px] bg-sky-50 text-sky-800 font-medium px-2 py-0.5 rounded border border-sky-200">
+                    <span className="text-slate-500">{b.label}:</span>
+                    <span className="font-semibold">{b.value}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="text-right text-[10px] text-slate-400">KeuanganKu</div>
         </div>

@@ -1,5 +1,6 @@
-import type { Transaction, HutangDPItem, HutangPiutangItem } from '@/lib/types';
+import type { Transaction, HutangDPItem, HutangPiutangItem, LaporanFilterOptions } from '@/lib/types';
 import { formatTanggalIndo } from '@/lib/utils';
+import { matchesTransaksiFilter } from './kelompokkan';
 
 // ============================================================
 // Padanan hitungDaftarHutangDariGrid(grid, sDate, eDate) di Kode.gs.
@@ -12,7 +13,8 @@ import { formatTanggalIndo } from '@/lib/utils';
 export function hitungDaftarHutangDariGrid(
   transaksi: Transaction[],
   sDate: Date | null = null,
-  eDate: Date | null = null
+  eDate: Date | null = null,
+  filter?: LaporanFilterOptions | null
 ): HutangDPItem[] {
   const byId: Record<string, Transaction[]> = {};
   const masterById: Record<string, Transaction> = {};
@@ -30,6 +32,7 @@ export function hitungDaftarHutangDariGrid(
     const tglMaster = new Date(m.tanggal);
     if (sDate && tglMaster < sDate) return;
     if (eDate && tglMaster > eDate) return;
+    if (filter && !matchesTransaksiFilter(m, filter)) return;
 
     const rows = (byId[pid] || []).slice().sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
     const totalDibayar = rows.reduce((a, r) => a + (parseFloat(String(r.nominal)) || 0), 0);
@@ -67,7 +70,8 @@ export function hitungDaftarHutangDariGrid(
 export function hitungDaftarHutangPiutangDariGrid(
   transaksi: Transaction[],
   sDate: Date | null = null,
-  eDate: Date | null = null
+  eDate: Date | null = null,
+  filter?: LaporanFilterOptions | null
 ): HutangPiutangItem[] {
   const byId: Record<string, Transaction[]> = {};
   const pokokById: Record<string, Transaction> = {};
@@ -85,6 +89,7 @@ export function hitungDaftarHutangPiutangDariGrid(
     const tglPokok = new Date(p.tanggal);
     if (sDate && tglPokok < sDate) return;
     if (eDate && tglPokok > eDate) return;
+    if (filter && !matchesTransaksiFilter(p, filter)) return;
 
     const rows = (byId[hpId] || [])
       .filter((r) => r.peranan_hp === 'Pembayaran')
@@ -126,7 +131,8 @@ export function hitungDaftarHutangPiutangDariGrid(
 export function hitungNetHutangPiutangDariGrid(
   transaksi: Transaction[],
   sDate: Date | null = null,
-  eDate: Date | null = null
+  eDate: Date | null = null,
+  filter?: LaporanFilterOptions | null
 ): { masuk: number; keluar: number } {
   let masuk = 0;
   let keluar = 0;
@@ -136,6 +142,7 @@ export function hitungNetHutangPiutangDariGrid(
     const tgl = new Date(row.tanggal);
     if (sDate && tgl < sDate) return;
     if (eDate && tgl > eDate) return;
+    if (filter && !matchesTransaksiFilter(row, filter)) return;
     const nom = parseFloat(String(row.nominal)) || 0;
     if (row.tipe === 'Pemasukan') masuk += nom;
     else if (row.tipe === 'Pengeluaran') keluar += nom;
