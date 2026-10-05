@@ -298,41 +298,43 @@ export function TopBar() {
   return (
     <header className="no-print sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/90 px-3 sm:px-5 py-2.5 transition-all">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-        {/* Brand / Logo */}
-        <Link href="/ringkasan" className="flex items-center gap-2 group select-none">
-          <motion.div
-            whileHover={{ rotate: 10, scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
-            className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20"
-          >
-            <Wallet size={18} strokeWidth={2.2} />
-          </motion.div>
-          <div>
+        {/* Brand / Logo & User Info */}
+        <div className="flex items-center gap-2 select-none">
+          <Link href="/ringkasan" className="flex items-center gap-2 group">
+            <motion.div
+              whileHover={{ rotate: 10, scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20"
+            >
+              <Wallet size={18} strokeWidth={2.2} />
+            </motion.div>
             <div className="font-bold text-slate-800 text-sm tracking-tight flex items-center gap-1 group-hover:text-sky-600 transition-colors">
               KeuanganKu
               <Sparkles size={12} className="text-amber-500 opacity-80" />
             </div>
-            <div className="text-[10px] text-slate-400 font-medium -mt-0.5 hidden sm:flex items-center gap-1.5">
-              <span>Kelola Keuangan</span>
-              <span>·</span>
-              {!isDemoMode && userEmail ? (
-                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  {userEmail}
-                </span>
-              ) : (
-                <Link
-                  href="/login"
-                  className="text-amber-700 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 font-semibold transition flex items-center gap-1"
-                  title="Klik untuk menghubungkan database Supabase Anda"
-                >
-                  <span>Mode Sample</span>
-                  <span className="text-sky-600 underline font-normal">Login</span>
-                </Link>
-              )}
-            </div>
+          </Link>
+
+          <div className="text-[10px] text-slate-400 font-medium hidden sm:flex items-center gap-1.5 ml-1">
+            <span>·</span>
+            <span>Kelola Keuangan</span>
+            <span>·</span>
+            {!isDemoMode && userEmail ? (
+              <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                {userEmail}
+              </span>
+            ) : (
+              <Link
+                href="/login"
+                className="text-amber-700 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 font-semibold transition flex items-center gap-1"
+                title="Klik untuk menghubungkan database Supabase Anda"
+              >
+                <span>Mode Sample</span>
+                <span className="text-sky-600 underline font-normal">Login</span>
+              </Link>
+            )}
           </div>
-        </Link>
+        </div>
 
         {/* Right Area: Workspace Switcher & Logout */}
         <div className="flex items-center gap-2 sm:gap-3">
