@@ -86,6 +86,7 @@ export default function LaporanPage() {
   // Opsi cetak
   const [jenis, setJenis] = useState<'ringkas' | 'detail'>('detail');
   const [sertakanBukti, setSertakanBukti] = useState(false);
+  const [sertakanCatatan, setSertakanCatatan] = useState(true);
   const [busy, setBusy] = useState<'' | 'ringkas' | 'detail'>('');
 
   // Hitung filter object yang efektif berdasarkan mode yang dipilih
@@ -184,6 +185,7 @@ export default function LaporanPage() {
       ws: init.active,
       jenis,
       bukti: sertakanBukti ? '1' : '0',
+      catatan: sertakanCatatan ? '1' : '0',
     });
 
     if (effectiveFilter.startDate) params.set('start', effectiveFilter.startDate);
@@ -543,6 +545,21 @@ export default function LaporanPage() {
           <div className="flex items-center gap-1.5">
             <ImageIcon size={14} className="text-slate-500" />
             <span>Sertakan lampiran foto bukti transaksi di halaman lampiran PDF</span>
+          </div>
+        </label>
+
+        {/* Checkbox Sertakan Catatan Transaksi */}
+        <label className="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={sertakanCatatan}
+            onChange={(e) => setSertakanCatatan(e.target.checked)}
+            disabled={jenis !== 'detail'}
+            className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 disabled:opacity-40"
+          />
+          <div className="flex items-center gap-1.5">
+            <FileText size={14} className="text-slate-500" />
+            <span>Sertakan catatan transaksi (ditampilkan di bawah keterangan)</span>
           </div>
         </label>
       </div>

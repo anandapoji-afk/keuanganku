@@ -54,6 +54,7 @@ export interface ItemLaporan {
   pihakTerkait: string;
   subKategori: string;
   bukti: string[];
+  catatan: string;
 }
 
 export interface SubBreakdownItem {
@@ -105,6 +106,7 @@ export function siapkanItemLaporan(
       pihakTerkait: row.pihak_terkait || '',
       subKategori: row.sub_kategori || '',
       bukti: row.bukti || [],
+      catatan: row.catatan || '',
     });
   });
   return out;

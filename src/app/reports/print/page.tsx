@@ -13,6 +13,7 @@ interface Props {
     end?: string;
     jenis?: string;
     bukti?: string;
+    catatan?: string;
     search?: string;
     tipe?: string;
     kategori?: string;
@@ -32,6 +33,7 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
   const end = searchParams.end || '';
   const jenis: JenisLaporan = searchParams.jenis === 'ringkas' ? 'ringkas' : 'detail';
   const sertakanBukti = searchParams.bukti === '1';
+  const sertakanCatatan = searchParams.catatan !== '0';
 
   const filterOptions: LaporanFilterOptions = {
     startDate: start,
@@ -88,12 +90,20 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
                       <tr key={idx} className="data-row avoid-break" style={hex ? { background: hex } : undefined}>
                         <td className="sub align-top">{t.tglTampil}</td>
                         <td className="sub align-top">
-                          {t.keterangan}
-                          {t.subKategori ? <span className="ml-1 text-[10px] text-slate-400">» {t.subKategori}</span> : null}
-                          {t.pihakTerkait ? (
-                            <span className="ml-1 text-[10px] font-semibold text-sky-600">
-                              ({t.tipe === 'Pemasukan' ? 'Dari' : 'Ke'}: {t.pihakTerkait})
-                            </span>
+                          <div>
+                            <span>{t.keterangan}</span>
+                            {t.subKategori ? <span className="ml-1 text-[10px] text-slate-400">» {t.subKategori}</span> : null}
+                            {t.pihakTerkait ? (
+                              <span className="ml-1 text-[10px] font-semibold text-sky-600">
+                                ({t.tipe === 'Pemasukan' ? 'Dari' : 'Ke'}: {t.pihakTerkait})
+                              </span>
+                            ) : null}
+                          </div>
+                          {sertakanCatatan && t.catatan ? (
+                            <div className="text-[9.5px] text-slate-600 italic mt-0.5 bg-slate-50/90 px-1.5 py-0.5 rounded border border-slate-200/60 flex items-start gap-1">
+                              <span className="font-semibold not-italic text-slate-400">Catatan:</span>
+                              <span>{t.catatan}</span>
+                            </div>
                           ) : null}
                         </td>
                         <td className="sub align-top">
@@ -247,7 +257,15 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
                   <tbody>
                     <tr className="data-row">
                       <td className="sub align-top">{item.tglTampil}</td>
-                      <td className="sub align-top">{item.keterangan}</td>
+                      <td className="sub align-top">
+                        <div>{item.keterangan}</div>
+                        {sertakanCatatan && item.catatan ? (
+                          <div className="text-[9.5px] text-slate-600 italic mt-0.5 bg-slate-50/90 px-1.5 py-0.5 rounded border border-slate-200/60 flex items-start gap-1">
+                            <span className="font-semibold not-italic text-slate-400">Catatan:</span>
+                            <span>{item.catatan}</span>
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="sub align-top"><span className="chip">{item.rekening}</span></td>
                       <td className={`sub num align-top ${item.tipe === 'Pemasukan' ? 'text-emerald-600' : 'text-red-600'}`}>{rp(item.nominal)}</td>
                     </tr>
