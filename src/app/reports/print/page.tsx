@@ -54,9 +54,35 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
     return <div className="p-8 text-red-600">Gagal memuat laporan: {data.error}</div>;
   }
 
-  const halamanLampiran: (typeof data.lampiranBukti)[] = [];
-  for (let i = 0; i < data.lampiranBukti.length; i += MAKS_BUKTI_PER_HALAMAN) {
-    halamanLampiran.push(data.lampiranBukti.slice(i, i + MAKS_BUKTI_PER_HALAMAN));
+  // Pengelompokan pintar per halaman:
+  // - Transaksi dengan 1 bukti gambar mengambil 1 slot (lebar 50%, 2 kolom berdampingan kanan-kiri)
+  // - Transaksi dengan >1 bukti gambar mengambil 2 slot (lebar penuh 100%)
+  // - 1 halaman A4 menampung hingga 4 slot (mis. 4 transaksi bukti tunggal dalam grid 2x2)
+  interface LampiranEntry {
+    item: (typeof data.lampiranBukti)[0];
+    span: 1 | 2;
+  }
+
+  const halamanLampiran: LampiranEntry[][] = [];
+  let curPage: LampiranEntry[] = [];
+  let curSlots = 0;
+  const MAX_SLOTS_PER_PAGE = 4;
+
+  data.lampiranBukti.forEach((item) => {
+    const span: 1 | 2 = item.bukti.length > 1 ? 2 : 1;
+    if (curSlots + span > MAX_SLOTS_PER_PAGE) {
+      if (curPage.length > 0) {
+        halamanLampiran.push(curPage);
+        curPage = [];
+        curSlots = 0;
+      }
+    }
+    curPage.push({ item, span });
+    curSlots += span;
+  });
+
+  if (curPage.length > 0) {
+    halamanLampiran.push(curPage);
   }
 
   function RenderGrup({ grup, warna }: { grup: GrupKategori[]; warna: 'in' | 'out' }) {
@@ -238,53 +264,72 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* ===== Lampiran Bukti Transaksi — halaman terpisah, maks 2 transaksi/halaman ===== */}
+      {/* ===== Lampiran Bukti Transaksi — berdampingan kanan-kiri (2 kolom) untuk hemat kertas ===== */}
       {halamanLampiran.length > 0 &&
         halamanLampiran.map((grup, pageIdx) => (
           <div key={pageIdx} className={`report-page page-break-before ${pageIdx < halamanLampiran.length - 1 ? 'page-break-after' : ''}`}>
-            {pageIdx === 0 && <div className="sect-title" style={{ borderLeftColor: '#0ea5e9' }}>Lampiran Bukti Transaksi</div>}
-            {grup.map((item, i) => (
-              <div key={i} className="lampiran-item">
-                <table className="data w-full text-xs mb-1">
-                  <thead>
-                    <tr className="thead-mini">
-                      <td className="sub w-[14%]">Tanggal</td>
-                      <td className="sub">Keterangan</td>
-                      <td className="sub w-[16%]">Rekening</td>
-                      <td className="sub num w-[16%]">Nominal</td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="data-row">
-                      <td className="sub align-top">{item.tglTampil}</td>
-                      <td className="sub align-top">
-                        <div>{item.keterangan}</div>
-                        {sertakanCatatan && item.catatan ? (
-                          <div className="text-[9.5px] text-slate-600 italic mt-0.5 bg-slate-50/90 px-1.5 py-0.5 rounded border border-slate-200/60 flex items-start gap-1">
-                            <span className="font-semibold not-italic text-slate-400">Catatan:</span>
-                            <span>{item.catatan}</span>
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="sub align-top"><span className="chip">{item.rekening}</span></td>
-                      <td className={`sub num align-top ${item.tipe === 'Pemasukan' ? 'text-emerald-600' : 'text-red-600'}`}>{rp(item.nominal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div className="flex flex-wrap gap-2 justify-center bg-slate-50 border border-dashed border-slate-300 rounded p-2">
-                  {item.bukti.filter(Boolean).map((url, bi) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={bi}
-                      src={url}
-                      alt={`Bukti ${item.keterangan}`}
-                      className="rounded border border-slate-300 object-contain bg-white"
-                      style={{ maxHeight: item.bukti.length > 1 ? 320 : 340, maxWidth: item.bukti.length > 1 ? '47%' : '96%' }}
-                    />
-                  ))}
+            <div className="sect-title mb-3" style={{ borderLeftColor: '#0ea5e9' }}>
+              Lampiran Bukti Transaksi {halamanLampiran.length > 1 ? `(Halaman ${pageIdx + 1}/${halamanLampiran.length})` : ''}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 items-start">
+              {grup.map(({ item, span }, i) => (
+                <div
+                  key={i}
+                  className={`avoid-break border border-slate-200 rounded-lg p-2.5 bg-white shadow-xs flex flex-col justify-between ${
+                    span === 2 ? 'col-span-2' : 'col-span-1'
+                  }`}
+                  style={{ minHeight: span === 2 ? '320px' : '260px' }}
+                >
+                  {/* Info Header Transaksi */}
+                  <div className="mb-2">
+                    <div className="flex justify-between items-center text-[10.5px] pb-1 border-b border-slate-100 font-medium">
+                      <span className="text-slate-500">{item.tglTampil}</span>
+                      <span className="chip text-[9px]">{item.rekening}</span>
+                      <span className={`font-bold tabular-nums ${item.tipe === 'Pemasukan' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {rp(item.nominal)}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 text-xs text-slate-900 font-semibold leading-snug">
+                      <span>{item.keterangan}</span>
+                      {item.subKategori ? (
+                        <span className="ml-1 text-[10px] text-slate-400 font-normal">» {item.subKategori}</span>
+                      ) : null}
+                      {item.pihakTerkait ? (
+                        <span className="ml-1 text-[10px] font-semibold text-sky-600">
+                          ({item.tipe === 'Pemasukan' ? 'Dari' : 'Ke'}: {item.pihakTerkait})
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {sertakanCatatan && item.catatan ? (
+                      <div className="text-[9.5px] text-slate-600 italic mt-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/70 flex items-start gap-1">
+                        <span className="font-semibold not-italic text-slate-400">Catatan:</span>
+                        <span>{item.catatan}</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Foto Bukti */}
+                  <div className="flex flex-wrap gap-2 justify-center items-center bg-slate-50/80 border border-dashed border-slate-200 rounded p-1.5 flex-1 mt-1">
+                    {item.bukti.filter(Boolean).map((url, bi) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={bi}
+                        src={url}
+                        alt={`Bukti ${item.keterangan}`}
+                        className="rounded border border-slate-200 object-contain bg-white"
+                        style={{
+                          maxHeight: span === 2 ? 260 : 210,
+                          maxWidth: item.bukti.length > 1 ? '48%' : '98%',
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         ))}
     </div>

@@ -52,6 +52,24 @@ export async function recalculateBalance(supabase: SupabaseClient, workspaceId: 
   await supabase.from('transactions').upsert(updates, { onConflict: 'id' });
 }
 
+const RANGE_REGEX = /<!--range:([0-9-]+)-->/;
+
+function formatCatatanWithRange(catatan: string, sampaiTanggal?: string | null): string {
+  const clean = (catatan || '').replace(/<!--range:.*?-->/g, '').trim();
+  if (sampaiTanggal && sampaiTanggal.trim()) {
+    return clean ? `${clean} <!--range:${sampaiTanggal.trim()}-->` : `<!--range:${sampaiTanggal.trim()}-->`;
+  }
+  return clean;
+}
+
+function parseCatatanRange(rawCatatan: string): { catatan: string; sampaiTanggal: string | null } {
+  if (!rawCatatan) return { catatan: '', sampaiTanggal: null };
+  const match = rawCatatan.match(RANGE_REGEX);
+  const sampaiTanggal = match ? match[1] : null;
+  const catatan = rawCatatan.replace(/<!--range:.*?-->/g, '').trim();
+  return { catatan, sampaiTanggal };
+}
+
 // Padanan simpanTransaksi(formObject) — mode tambah baru & edit sekaligus.
 export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<ActionResult> {
   try {
@@ -90,6 +108,8 @@ export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<
       if (nominal > totalTagihanBaru) return { success: false, error: 'Error: Nominal DP tidak boleh melebihi Total Tagihan.' };
     }
 
+    const sampaiTanggal = (payload.sampaiTanggal || '').trim() || null;
+
     if (payload.rowIdx) {
       // ---- MODE EDIT ----
       const { data: rowLama } = await supabase
@@ -111,7 +131,8 @@ export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<
       const piutangIdLama = rowLama.piutang_id || '';
       const statusBayarLama = rowLama.status_bayar || 'Lunas';
       const warnaHighlightLama = payload.warnaHighlight !== undefined ? payload.warnaHighlight : rowLama.warna_highlight || '';
-      const catatanLama = payload.catatan !== undefined ? payload.catatan : rowLama.catatan || '';
+      const catatanInput = payload.catatan !== undefined ? payload.catatan : rowLama.catatan || '';
+      const finalCatatan = formatCatatanWithRange(catatanInput, sampaiTanggal);
 
       if (statusBayarLama === 'DP' && piutangIdLama) {
         const { count } = await supabase
@@ -148,7 +169,7 @@ export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<
           total_tagihan: totalTagihanBaru,
           jam,
           warna_highlight: warnaHighlightLama,
-          catatan: catatanLama,
+          catatan: finalCatatan,
           pihak_terkait: pihakTerkait,
           sub_kategori: subKategori,
         })
@@ -161,6 +182,7 @@ export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<
     } else {
       // ---- MODE TAMBAH BARU ----
       if (statusBayarBaru === 'DP') piutangId = buatId('PTG');
+      const finalCatatan = formatCatatanWithRange(payload.catatan || '', sampaiTanggal);
 
       const { error } = await supabase.from('transactions').insert({
         workspace_id: wsId,
@@ -177,7 +199,7 @@ export async function simpanTransaksi(payload: SimpanTransaksiPayload): Promise<
         total_tagihan: totalTagihanBaru,
         jam,
         warna_highlight: payload.warnaHighlight || '',
-        catatan: payload.catatan || '',
+        catatan: finalCatatan,
         pihak_terkait: pihakTerkait,
         sub_kategori: subKategori,
       });
@@ -200,9 +222,19 @@ export async function simpanHighlightCatatan(obj: SimpanHighlightCatatanPayload)
     const wsId = await resolveWorkspaceId(supabase, user.id, obj.workspace);
     if (!wsId) return { success: false, error: 'Error: Data akun tidak ditemukan!' };
 
+    const { data: rowLama } = await supabase
+      .from('transactions')
+      .select('catatan')
+      .eq('id', obj.rowIdx)
+      .eq('workspace_id', wsId)
+      .single();
+
+    const oldRange = rowLama?.catatan ? parseCatatanRange(rowLama.catatan).sampaiTanggal : null;
+    const finalCatatan = formatCatatanWithRange(obj.catatan || '', oldRange);
+
     const { error } = await supabase
       .from('transactions')
-      .update({ warna_highlight: obj.warna || '', catatan: (obj.catatan || '').trim() })
+      .update({ warna_highlight: obj.warna || '', catatan: finalCatatan })
       .eq('id', obj.rowIdx)
       .eq('workspace_id', wsId);
     if (error) return { success: false, error: 'Error: ' + error.message };
@@ -307,8 +339,17 @@ export async function getRiwayatTransaksi(ws: string): Promise<RiwayatTransaksi>
     deposits: ((t as unknown as { savings_deposits: unknown[] }).savings_deposits || []) as RiwayatTransaksi['tabungan'][number]['deposits'],
   }));
 
+  const parsedTransaksi: Transaction[] = ((transaksi || []) as any[]).map((row) => {
+    const { catatan, sampaiTanggal } = parseCatatanRange(row.catatan || '');
+    return {
+      ...row,
+      catatan,
+      sampai_tanggal: row.sampai_tanggal || sampaiTanggal,
+    };
+  });
+
   return {
-    transaksi: (transaksi || []) as Transaction[],
+    transaksi: parsedTransaksi,
     anggaran: (anggaran || []) as Budget[],
     tabungan,
   };

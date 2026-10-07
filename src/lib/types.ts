@@ -68,6 +68,7 @@ export interface Transaction {
   id: string;
   workspace_id: string;
   tanggal: string; // yyyy-MM-dd
+  sampai_tanggal?: string | null; // yyyy-MM-dd (opsional untuk transaksi akumulasi)
   jam: string; // HH:mm
   tipe: Tipe;
   kategori: string;
@@ -159,6 +160,7 @@ export interface SimpanTransaksiPayload {
   rowIdx?: string; // id transaksi saat mode edit, kosong saat tambah baru
   workspace: string;
   tanggal: string;
+  sampaiTanggal?: string; // yyyy-MM-dd (opsional untuk transaksi akumulasi)
   jam: string;
   tipe: Tipe;
   kategori: string;

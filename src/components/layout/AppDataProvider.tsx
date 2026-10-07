@@ -72,17 +72,33 @@ function matchesDynamicFilter(row: Transaction, filter: TransaksiFilterState): b
   if (filter.warna !== 'Semua' && row.warna_highlight !== filter.warna) return false;
   if (filter.rekening && row.rekening !== filter.rekening) return false;
   if (filter.kategori && row.kategori !== filter.kategori) return false;
-  if (filter.tanggal && row.tanggal !== filter.tanggal) return false;
+
+  const rowEndDate = row.sampai_tanggal || row.tanggal;
+
+  if (filter.tanggal) {
+    if (row.sampai_tanggal) {
+      if (filter.tanggal < row.tanggal || filter.tanggal > row.sampai_tanggal) return false;
+    } else {
+      if (row.tanggal !== filter.tanggal) return false;
+    }
+  }
+
   if (filter.bulan) {
     const [y, m] = filter.bulan.split('-');
-    const tgl = new Date(`${row.tanggal}T00:00:00`);
-    if (String(tgl.getFullYear()) !== y || String(tgl.getMonth() + 1).padStart(2, '0') !== m) return false;
+    const tglStart = new Date(`${row.tanggal}T00:00:00`);
+    const tglEnd = new Date(`${rowEndDate}T00:00:00`);
+    const startMatch = String(tglStart.getFullYear()) === y && String(tglStart.getMonth() + 1).padStart(2, '0') === m;
+    const endMatch = String(tglEnd.getFullYear()) === y && String(tglEnd.getMonth() + 1).padStart(2, '0') === m;
+    if (!startMatch && !endMatch) return false;
   }
+
   if (filter.tahun) {
-    const tgl = new Date(`${row.tanggal}T00:00:00`);
-    if (String(tgl.getFullYear()) !== filter.tahun) return false;
+    const tglStart = new Date(`${row.tanggal}T00:00:00`);
+    const tglEnd = new Date(`${rowEndDate}T00:00:00`);
+    if (String(tglStart.getFullYear()) !== filter.tahun && String(tglEnd.getFullYear()) !== filter.tahun) return false;
   }
-  if (filter.startDate && new Date(`${row.tanggal}T00:00:00`) < new Date(`${filter.startDate}T00:00:00`)) return false;
+
+  if (filter.startDate && new Date(`${rowEndDate}T00:00:00`) < new Date(`${filter.startDate}T00:00:00`)) return false;
   if (filter.endDate && new Date(`${row.tanggal}T00:00:00`) > new Date(`${filter.endDate}T23:59:59`)) return false;
 
   return true;

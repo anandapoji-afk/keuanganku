@@ -93,7 +93,14 @@ export async function generateLaporanExcelDetail(
     if (!wsId) return { error: 'Data akun tidak ditemukan!' };
 
     const { data: transRows } = await supabase.from('transactions').select('*').eq('workspace_id', wsId);
-    const transaksi = (transRows || []) as Transaction[];
+    const transaksi = ((transRows || []) as any[]).map((row) => {
+      const match = (row.catatan || '').match(/<!--range:([0-9-]+)-->/);
+      return {
+        ...row,
+        catatan: (row.catatan || '').replace(/<!--range:.*?-->/g, '').trim(),
+        sampai_tanggal: row.sampai_tanggal || (match ? match[1] : null),
+      };
+    }) as Transaction[];
 
     const { data: katRows } = await supabase.from('categories').select('tipe, nama').eq('workspace_id', wsId);
     const { urutanMasuk, urutanKeluar } = urutanKategori((katRows || []) as { tipe: 'Pemasukan' | 'Pengeluaran'; nama: string }[]);

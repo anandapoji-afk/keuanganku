@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer } from 'lucide-react';
+import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer, Archive, Download } from 'lucide-react';
+import JSZip from 'jszip';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
 import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex } from '@/lib/utils';
@@ -82,6 +83,7 @@ function fileToBase64(file: File): Promise<string> {
 
 const FORM_KOSONG = {
   tanggal: new Date().toISOString().slice(0, 10),
+  sampaiTanggal: '',
   jam: '',
   tipe: 'Pengeluaran' as Tipe,
   kategori: '',
@@ -188,6 +190,7 @@ export default function TransaksiPage() {
   const [previewBuktiDaftar, setPreviewBuktiDaftar] = useState<string[]>([]);
   const [previewBuktiIndex, setPreviewBuktiIndex] = useState(0);
   const [previewBuktiLabel, setPreviewBuktiLabel] = useState('');
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const previewBuktiUrl = previewBuktiDaftar[previewBuktiIndex] ?? null;
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -295,6 +298,7 @@ export default function TransaksiPage() {
     setEditId(t.id);
     setForm({
       tanggal: t.tanggal,
+      sampaiTanggal: t.sampai_tanggal || '',
       jam: t.jam,
       tipe: t.tipe,
       kategori: t.kategori,
@@ -344,6 +348,53 @@ export default function TransaksiPage() {
     setPreviewBuktiIndex((i) => (i + 1) % previewBuktiDaftar.length);
   }
 
+  // Unduh semua bukti dalam daftar lightbox sebagai file zip dengan nama sesuai keterangan transaksi
+  async function unduhSemuaBuktiZip(daftarUrls: string[], namaTransaksi: string) {
+    if (!daftarUrls || daftarUrls.length === 0) return;
+    setIsDownloadingZip(true);
+    try {
+      const zip = new JSZip();
+      const rawTitle = (namaTransaksi || 'bukti-transaksi').trim();
+      const cleanTitle = rawTitle.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) || 'bukti-transaksi';
+
+      for (let i = 0; i < daftarUrls.length; i++) {
+        const url = daftarUrls[i];
+        try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          let ext = 'jpg';
+          if (blob.type === 'image/png') ext = 'png';
+          else if (blob.type === 'image/webp') ext = 'webp';
+          else if (blob.type === 'image/svg+xml') ext = 'svg';
+          else if (blob.type === 'image/jpeg') ext = 'jpg';
+          else if (url.toLowerCase().includes('.png')) ext = 'png';
+          else if (url.toLowerCase().includes('.webp')) ext = 'webp';
+          else if (url.toLowerCase().includes('.svg')) ext = 'svg';
+
+          const filename = `${cleanTitle}_bukti_${i + 1}.${ext}`;
+          zip.file(filename, blob);
+        } catch (err) {
+          console.error('Gagal mengambil file bukti untuk zip:', err);
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${cleanTitle}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+    } catch (e) {
+      console.error('Gagal membuat file zip:', e);
+      alert('Gagal mengunduh file zip bukti.');
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  }
+
   // Navigasi keyboard di lightbox (desktop): kiri/kanan ganti bukti, Esc tutup.
   useEffect(() => {
     if (previewBuktiDaftar.length === 0) return;
@@ -380,6 +431,7 @@ export default function TransaksiPage() {
       rowIdx: editId || undefined,
       workspace: init.active,
       tanggal: form.tanggal,
+      sampaiTanggal: form.sampaiTanggal ? form.sampaiTanggal.trim() : undefined,
       jam: form.jam,
       tipe: form.tipe,
       kategori: form.kategori,
@@ -610,9 +662,21 @@ export default function TransaksiPage() {
                       {t.sub_kategori ? ` \u00bb ${t.sub_kategori}` : ''}
                     </span>
                     <span className="text-[11px] text-slate-400">
-                      {t.tanggal} {'\u00b7'} {t.rekening}
+                      {t.sampai_tanggal && t.sampai_tanggal !== t.tanggal ? (
+                        <span className="text-slate-700 font-medium">
+                          {t.tanggal} s/d {t.sampai_tanggal}
+                        </span>
+                      ) : (
+                        t.tanggal
+                      )}{' '}
+                      {'\u00b7'} {t.rekening}
                       {t.status_bayar === 'DP' ? ' \u00b7 DP' : ''}
                     </span>
+                    {t.sampai_tanggal && t.sampai_tanggal !== t.tanggal && (
+                      <span className="text-[9.5px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded-md">
+                        Akumulasi
+                      </span>
+                    )}
                   </div>
                   {t.pihak_terkait && (
                     <div className="text-[11px] text-slate-500 mt-0.5">
@@ -716,12 +780,37 @@ export default function TransaksiPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Tanggal">
-              <input type="date" value={form.tanggal} onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))} className="inp" />
-            </Field>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Dari Tanggal">
+                <input
+                  type="date"
+                  value={form.tanggal}
+                  onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))}
+                  className="inp"
+                />
+              </Field>
+              <Field label="Sampai Tanggal (opsional)">
+                <input
+                  type="date"
+                  value={form.sampaiTanggal}
+                  onChange={(e) => setForm((f) => ({ ...f, sampaiTanggal: e.target.value }))}
+                  className="inp"
+                />
+              </Field>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10.5px] text-slate-500">
+                💡 Isi <strong>Sampai Tanggal</strong> jika transaksi ini merupakan akumulasi rentang hari.
+              </span>
+            </div>
             <Field label="Jam (opsional)">
-              <input type="time" value={form.jam} onChange={(e) => setForm((f) => ({ ...f, jam: e.target.value }))} className="inp" />
+              <input
+                type="time"
+                value={form.jam}
+                onChange={(e) => setForm((f) => ({ ...f, jam: e.target.value }))}
+                className="inp"
+              />
             </Field>
           </div>
 
@@ -960,15 +1049,29 @@ export default function TransaksiPage() {
           )}
 
           <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-            <a
-              href={previewBuktiUrl || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              download="bukti-transaksi.jpg"
-              className="text-xs text-sky-700 hover:text-sky-800 font-medium flex items-center gap-1.5 border border-sky-300 px-3 py-1.5 rounded-lg bg-sky-50 shadow-sm transition"
-            >
-              <span>⬇️</span> Unduh / Buka Gambar Asli
-            </a>
+            <div className="flex items-center gap-2 flex-wrap">
+              <a
+                href={previewBuktiUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                download="bukti-transaksi.jpg"
+                className="text-xs text-sky-700 hover:text-sky-800 font-medium flex items-center gap-1.5 border border-sky-300 px-3 py-1.5 rounded-lg bg-sky-50 shadow-sm transition active:scale-95"
+              >
+                <Download size={13} />
+                <span>Unduh Gambar Ini</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => unduhSemuaBuktiZip(previewBuktiDaftar, previewBuktiLabel)}
+                disabled={isDownloadingZip || previewBuktiDaftar.length === 0}
+                className="text-xs text-white bg-slate-800 hover:bg-slate-900 active:bg-black font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg shadow-sm transition disabled:opacity-50 active:scale-95"
+                title={`Unduh semua ${previewBuktiDaftar.length} file bukti sebagai file .zip bernama "${previewBuktiLabel || 'bukti-transaksi'}.zip"`}
+              >
+                <Archive size={13} />
+                <span>{isDownloadingZip ? 'Mengompres ZIP...' : `Unduh Semua ZIP (${previewBuktiDaftar.length})`}</span>
+              </button>
+            </div>
 
             <div className="flex items-center gap-2">
               {modalOpen && editId && previewBuktiUrl && buktiLama.includes(previewBuktiUrl) && (

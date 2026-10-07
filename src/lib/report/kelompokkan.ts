@@ -26,17 +26,33 @@ export function matchesTransaksiFilter(row: Transaction, filter?: LaporanFilterO
   if (filter.warna && filter.warna !== 'Semua' && row.warna_highlight !== filter.warna) return false;
   if (filter.rekening && row.rekening !== filter.rekening) return false;
   if (filter.kategori && row.kategori !== filter.kategori) return false;
-  if (filter.tanggal && row.tanggal !== filter.tanggal) return false;
+
+  const rowEndDate = row.sampai_tanggal || row.tanggal;
+
+  if (filter.tanggal) {
+    if (row.sampai_tanggal) {
+      if (filter.tanggal < row.tanggal || filter.tanggal > row.sampai_tanggal) return false;
+    } else {
+      if (row.tanggal !== filter.tanggal) return false;
+    }
+  }
+
   if (filter.bulan) {
     const [y, m] = filter.bulan.split('-');
-    const tgl = new Date(`${row.tanggal}T00:00:00`);
-    if (String(tgl.getFullYear()) !== y || String(tgl.getMonth() + 1).padStart(2, '0') !== m) return false;
+    const tglStart = new Date(`${row.tanggal}T00:00:00`);
+    const tglEnd = new Date(`${rowEndDate}T00:00:00`);
+    const startMatch = String(tglStart.getFullYear()) === y && String(tglStart.getMonth() + 1).padStart(2, '0') === m;
+    const endMatch = String(tglEnd.getFullYear()) === y && String(tglEnd.getMonth() + 1).padStart(2, '0') === m;
+    if (!startMatch && !endMatch) return false;
   }
+
   if (filter.tahun) {
-    const tgl = new Date(`${row.tanggal}T00:00:00`);
-    if (String(tgl.getFullYear()) !== filter.tahun) return false;
+    const tglStart = new Date(`${row.tanggal}T00:00:00`);
+    const tglEnd = new Date(`${rowEndDate}T00:00:00`);
+    if (String(tglStart.getFullYear()) !== filter.tahun && String(tglEnd.getFullYear()) !== filter.tahun) return false;
   }
-  if (filter.startDate && new Date(`${row.tanggal}T00:00:00`) < new Date(`${filter.startDate}T00:00:00`)) return false;
+
+  if (filter.startDate && new Date(`${rowEndDate}T00:00:00`) < new Date(`${filter.startDate}T00:00:00`)) return false;
   if (filter.endDate && new Date(`${row.tanggal}T00:00:00`) > new Date(`${filter.endDate}T23:59:59`)) return false;
 
   return true;
@@ -84,18 +100,21 @@ export function siapkanItemLaporan(
 ): ItemLaporan[] {
   const out: ItemLaporan[] = [];
   transaksi.forEach((row) => {
-    if (sDate) {
-      const tgl = new Date(row.tanggal);
-      if (tgl < sDate) return;
-    }
-    if (eDate) {
-      const tgl = new Date(row.tanggal);
-      if (tgl > eDate) return;
-    }
+    const rowEndDate = row.sampai_tanggal ? new Date(row.sampai_tanggal) : new Date(row.tanggal);
+    const rowStartDate = new Date(row.tanggal);
+
+    if (sDate && rowEndDate < sDate) return;
+    if (eDate && rowStartDate > eDate) return;
     if (filter && !matchesTransaksiFilter(row, filter)) return;
     if (['Transfer', 'Hutang', 'Piutang', 'Tabungan'].includes(row.kategori)) return;
+
+    const tglTampil =
+      row.sampai_tanggal && row.sampai_tanggal !== row.tanggal
+        ? `${formatTanggalIndo(row.tanggal)} - ${formatTanggalIndo(row.sampai_tanggal)}`
+        : formatTanggalIndo(row.tanggal);
+
     out.push({
-      tglTampil: formatTanggalIndo(row.tanggal),
+      tglTampil,
       tglSort: row.tanggal,
       tipe: row.tipe,
       kategori: row.kategori || '-',
