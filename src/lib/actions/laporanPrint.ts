@@ -15,6 +15,8 @@ export interface LampiranBuktiItem {
   tipe: 'Pemasukan' | 'Pengeluaran';
   bukti: string[];
   catatan?: string;
+  subKategori?: string;
+  pihakTerkait?: string;
 }
 
 export interface FilterBadgeItem {
@@ -184,6 +186,8 @@ export async function ambilDataLaporanPrint(
             tipe: d.tipe,
             bukti: d.bukti,
             catatan: d.catatan,
+            subKategori: d.subKategori,
+            pihakTerkait: d.pihakTerkait,
           });
         });
     }
