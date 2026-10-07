@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer, Archive, Download } from 'lucide-react';
+import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer, Archive, Download, UploadCloud, GripVertical, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import JSZip from 'jszip';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
@@ -417,6 +417,117 @@ export default function TransaksiPage() {
 
   function hapusFileBaru(index: number) {
     setFileBaru((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  // ===== Drag and Drop Reordering untuk Bukti Lama =====
+  const [dragBuktiLamaIdx, setDragBuktiLamaIdx] = useState<number | null>(null);
+  const [dragOverBuktiLamaIdx, setDragOverBuktiLamaIdx] = useState<number | null>(null);
+
+  function handleBuktiLamaDragStart(e: React.DragEvent, index: number) {
+    setDragBuktiLamaIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  }
+
+  function handleBuktiLamaDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverBuktiLamaIdx !== index) {
+      setDragOverBuktiLamaIdx(index);
+    }
+  }
+
+  function handleBuktiLamaDrop(e: React.DragEvent, targetIndex: number) {
+    e.preventDefault();
+    if (dragBuktiLamaIdx !== null && dragBuktiLamaIdx !== targetIndex) {
+      setBuktiLama((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(dragBuktiLamaIdx, 1);
+        next.splice(targetIndex, 0, moved);
+        return next;
+      });
+    }
+    setDragBuktiLamaIdx(null);
+    setDragOverBuktiLamaIdx(null);
+  }
+
+  function handleBuktiLamaDragEnd() {
+    setDragBuktiLamaIdx(null);
+    setDragOverBuktiLamaIdx(null);
+  }
+
+  function geserBuktiLama(index: number, arah: -1 | 1) {
+    const target = index + arah;
+    if (target < 0 || target >= buktiLama.length) return;
+    setBuktiLama((prev) => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[target];
+      next[target] = temp;
+      return next;
+    });
+  }
+
+  // ===== Drag and Drop Reordering untuk Bukti Baru =====
+  const [dragFileBaruIdx, setDragFileBaruIdx] = useState<number | null>(null);
+  const [dragOverFileBaruIdx, setDragOverFileBaruIdx] = useState<number | null>(null);
+
+  function handleFileBaruDragStart(e: React.DragEvent, index: number) {
+    setDragFileBaruIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  }
+
+  function handleFileBaruDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverFileBaruIdx !== index) {
+      setDragOverFileBaruIdx(index);
+    }
+  }
+
+  function handleFileBaruDrop(e: React.DragEvent, targetIndex: number) {
+    e.preventDefault();
+    if (dragFileBaruIdx !== null && dragFileBaruIdx !== targetIndex) {
+      setFileBaru((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(dragFileBaruIdx, 1);
+        next.splice(targetIndex, 0, moved);
+        return next;
+      });
+    }
+    setDragFileBaruIdx(null);
+    setDragOverFileBaruIdx(null);
+  }
+
+  function handleFileBaruDragEnd() {
+    setDragFileBaruIdx(null);
+    setDragOverFileBaruIdx(null);
+  }
+
+  function geserFileBaru(index: number, arah: -1 | 1) {
+    const target = index + arah;
+    if (target < 0 || target >= fileBaru.length) return;
+    setFileBaru((prev) => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[target];
+      next[target] = temp;
+      return next;
+    });
+  }
+
+  // ===== Drag and drop file upload dropzone =====
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  function handleDropFiles(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDraggingFiles(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+      if (droppedFiles.length > 0) {
+        setFileBaru((prev) => [...prev, ...droppedFiles]);
+      }
+    }
   }
 
   async function simpan() {
@@ -881,57 +992,148 @@ export default function TransaksiPage() {
           </Field>
 
           <Field label="Bukti Transaksi (opsional, bisa lebih dari 1)">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                setFileBaru((prev) => [...prev, ...files]);
-                e.target.value = '';
+            {/* Area Dropzone Upload File */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDraggingFiles(true);
               }}
-              className="text-xs w-full text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer"
-            />
+              onDragLeave={() => setIsDraggingFiles(false)}
+              onDrop={handleDropFiles}
+              className={`relative border-2 border-dashed rounded-xl p-3 text-center transition-all ${
+                isDraggingFiles
+                  ? 'border-sky-500 bg-sky-50/80 scale-[1.01]'
+                  : 'border-slate-300 hover:border-sky-400 bg-slate-50/60 hover:bg-sky-50/30'
+              }`}
+            >
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                id="upload-bukti-input"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setFileBaru((prev) => [...prev, ...files]);
+                  e.target.value = '';
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <div className="flex flex-col items-center justify-center gap-1 pointer-events-none">
+                <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shadow-sm">
+                  <UploadCloud size={16} />
+                </div>
+                <div className="text-xs font-semibold text-slate-700">
+                  <span>Klik atau seret foto bukti ke sini</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Format JPG, PNG, WEBP (Bisa lebih dari 1 foto)</div>
+              </div>
+            </div>
+
+            {/* Hint Geser Urutan */}
+            {(buktiLama.length > 1 || fileBaru.length > 1) && (
+              <div className="flex items-center gap-1.5 mt-2 text-[10.5px] text-sky-700 bg-sky-50/80 px-2.5 py-1.5 rounded-lg border border-sky-200">
+                <GripVertical size={13} className="shrink-0 text-sky-500" />
+                <span>Geser &amp; lepas (drag &amp; drop) atau gunakan tombol ‹ › untuk mengatur urutan gambar.</span>
+              </div>
+            )}
 
             {/* Bukti Lama (Existing) */}
             {buktiLama.length > 0 && (
               <div className="space-y-1.5 mt-2.5">
-                <div className="flex justify-between items-center text-[11px] font-semibold text-slate-600">
-                  <span>Bukti Tersimpan ({buktiLama.length}):</span>
+                <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700">
+                  <span className="flex items-center gap-1">
+                    <ImageIcon size={13} className="text-slate-500" />
+                    Bukti Tersimpan ({buktiLama.length}):
+                  </span>
                   <span className="text-[10px] text-slate-400 font-normal">Klik × untuk menghapus</span>
                 </div>
-                <div className="flex flex-wrap gap-2.5">
-                  {buktiLama.map((url, i) => (
-                    <div key={i} className="relative group">
-                      <button
-                        type="button"
-                        onClick={() => bukaPreviewBukti(buktiLama, i, 'Bukti Tersimpan')}
-                        className="block rounded-lg overflow-hidden border-2 border-slate-200 hover:border-sky-400 focus:outline-none transition shadow-sm"
-                        title="Klik untuk melihat ukuran penuh"
+                <div className="flex flex-wrap gap-3 pt-0.5">
+                  {buktiLama.map((url, i) => {
+                    const isDragging = dragBuktiLamaIdx === i;
+                    const isOver = dragOverBuktiLamaIdx === i;
+                    return (
+                      <div
+                        key={i}
+                        draggable
+                        onDragStart={(e) => handleBuktiLamaDragStart(e, i)}
+                        onDragOver={(e) => handleBuktiLamaDragOver(e, i)}
+                        onDrop={(e) => handleBuktiLamaDrop(e, i)}
+                        onDragEnd={handleBuktiLamaDragEnd}
+                        className={`relative group rounded-xl p-1 border-2 transition-all cursor-grab active:cursor-grabbing bg-white shadow-sm select-none ${
+                          isDragging
+                            ? 'opacity-40 border-sky-400 scale-95'
+                            : isOver
+                            ? 'border-sky-500 ring-2 ring-sky-300 scale-105'
+                            : 'border-slate-200 hover:border-sky-400 hover:shadow-md'
+                        }`}
+                        title="Tahan dan geser untuk mengubah urutan"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={url}
-                          alt={`Bukti ${i + 1}`}
-                          className="w-14 h-14 object-cover bg-slate-100"
-                          onError={(e) => {
-                            e.currentTarget.src = FALLBACK_RECEIPT_SVG;
+                        {/* Nomor Urut Badge */}
+                        <div className="absolute -top-2 -left-2 bg-slate-800 text-white text-[9px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md z-10">
+                          {i + 1}
+                        </div>
+
+                        {/* Tombol Hapus */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            hapusBuktiLama(i);
                           }}
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          hapusBuktiLama(i);
-                        }}
-                        title="Hapus bukti ini"
-                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                          title="Hapus bukti ini"
+                          className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition z-10"
+                        >
+                          ×
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => bukaPreviewBukti(buktiLama, i, 'Bukti Tersimpan')}
+                          className="block rounded-lg overflow-hidden focus:outline-none"
+                          title="Klik untuk melihat ukuran penuh"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={url}
+                            alt={`Bukti ${i + 1}`}
+                            className="w-16 h-16 object-cover bg-slate-100 pointer-events-none rounded-lg"
+                            onError={(e) => {
+                              e.currentTarget.src = FALLBACK_RECEIPT_SVG;
+                            }}
+                          />
+                        </button>
+
+                        {/* Tombol Navigasi Cepat Kiri/Kanan & Grip */}
+                        <div className="flex items-center justify-between mt-1 px-0.5">
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              geserBuktiLama(i, -1);
+                            }}
+                            className="w-4 h-4 rounded bg-slate-100 hover:bg-sky-100 text-slate-600 hover:text-sky-700 disabled:opacity-20 flex items-center justify-center text-[10px] font-bold"
+                            title="Geser ke kiri"
+                          >
+                            ‹
+                          </button>
+                          <GripVertical size={11} className="text-slate-400" />
+                          <button
+                            type="button"
+                            disabled={i === buktiLama.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              geserBuktiLama(i, 1);
+                            }}
+                            className="w-4 h-4 rounded bg-slate-100 hover:bg-sky-100 text-slate-600 hover:text-sky-700 disabled:opacity-20 flex items-center justify-center text-[10px] font-bold"
+                            title="Geser ke kanan"
+                          >
+                            ›
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -940,29 +1142,40 @@ export default function TransaksiPage() {
             {fileBaru.length > 0 && (
               <div className="space-y-1.5 mt-2.5">
                 <div className="flex justify-between items-center text-[11px] font-semibold text-emerald-700">
-                  <span>Bukti Baru Dipilih ({fileBaru.length}):</span>
+                  <span className="flex items-center gap-1">
+                    <ImageIcon size={13} className="text-emerald-600" />
+                    Bukti Baru Dipilih ({fileBaru.length}):
+                  </span>
                   <span className="text-[10px] text-slate-400 font-normal">Klik × untuk membatalkan</span>
                 </div>
-                <div className="flex flex-wrap gap-2.5">
+                <div className="flex flex-wrap gap-3 pt-0.5">
                   {fileBaru.map((file, i) => {
                     const objectUrl = fileBaruUrls[i];
+                    const isDragging = dragFileBaruIdx === i;
+                    const isOver = dragOverFileBaruIdx === i;
                     return (
-                      <div key={i} className="relative group">
-                        <button
-                          type="button"
-                          onClick={() => objectUrl && bukaPreviewBukti(fileBaruUrls, i, 'Bukti Baru')}
-                          className="block rounded-lg overflow-hidden border-2 border-emerald-300 hover:border-emerald-500 focus:outline-none transition shadow-sm"
-                          title="Klik untuk melihat preview"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          {objectUrl && (
-                            <img
-                              src={objectUrl}
-                              alt={file.name}
-                              className="w-14 h-14 object-cover bg-slate-100"
-                            />
-                          )}
-                        </button>
+                      <div
+                        key={i}
+                        draggable
+                        onDragStart={(e) => handleFileBaruDragStart(e, i)}
+                        onDragOver={(e) => handleFileBaruDragOver(e, i)}
+                        onDrop={(e) => handleFileBaruDrop(e, i)}
+                        onDragEnd={handleFileBaruDragEnd}
+                        className={`relative group rounded-xl p-1 border-2 transition-all cursor-grab active:cursor-grabbing bg-white shadow-sm select-none ${
+                          isDragging
+                            ? 'opacity-40 border-emerald-400 scale-95'
+                            : isOver
+                            ? 'border-emerald-500 ring-2 ring-emerald-300 scale-105'
+                            : 'border-emerald-200 hover:border-emerald-400 hover:shadow-md'
+                        }`}
+                        title="Tahan dan geser untuk mengubah urutan"
+                      >
+                        {/* Nomor Urut Badge */}
+                        <div className="absolute -top-2 -left-2 bg-emerald-700 text-white text-[9px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md z-10">
+                          {i + 1}
+                        </div>
+
+                        {/* Tombol Hapus */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -970,11 +1183,56 @@ export default function TransaksiPage() {
                             hapusFileBaru(i);
                           }}
                           title="Batalkan file ini"
-                          className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition"
+                          className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition z-10"
                         >
                           ×
                         </button>
-                        <span className="block text-[9px] text-slate-500 truncate max-w-[56px] mt-0.5" title={file.name}>
+
+                        <button
+                          type="button"
+                          onClick={() => objectUrl && bukaPreviewBukti(fileBaruUrls, i, 'Bukti Baru')}
+                          className="block rounded-lg overflow-hidden focus:outline-none"
+                          title="Klik untuk melihat preview"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {objectUrl && (
+                            <img
+                              src={objectUrl}
+                              alt={file.name}
+                              className="w-16 h-16 object-cover bg-slate-100 pointer-events-none rounded-lg"
+                            />
+                          )}
+                        </button>
+
+                        {/* Tombol Navigasi Cepat Kiri/Kanan & Grip */}
+                        <div className="flex items-center justify-between mt-1 px-0.5">
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              geserFileBaru(i, -1);
+                            }}
+                            className="w-4 h-4 rounded bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 disabled:opacity-20 flex items-center justify-center text-[10px] font-bold"
+                            title="Geser ke kiri"
+                          >
+                            ‹
+                          </button>
+                          <GripVertical size={11} className="text-slate-400" />
+                          <button
+                            type="button"
+                            disabled={i === fileBaru.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              geserFileBaru(i, 1);
+                            }}
+                            className="w-4 h-4 rounded bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 disabled:opacity-20 flex items-center justify-center text-[10px] font-bold"
+                            title="Geser ke kanan"
+                          >
+                            ›
+                          </button>
+                        </div>
+                        <span className="block text-[9px] text-slate-500 truncate max-w-[64px] text-center mt-0.5" title={file.name}>
                           {file.name}
                         </span>
                       </div>
