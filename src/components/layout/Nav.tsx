@@ -341,6 +341,7 @@ export function TopBar() {
           {/* Workspace Switcher */}
           <div className="relative flex items-center">
             <select
+              suppressHydrationWarning
               value={init.active}
               disabled={loading}
               onChange={(e) => onSelectWorkspace(e.target.value)}

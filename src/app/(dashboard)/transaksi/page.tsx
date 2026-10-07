@@ -593,6 +593,7 @@ export default function TransaksiPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
             <input
+              suppressHydrationWarning
               value={filter.search}
               onChange={(e) => setFilter((prev) => ({ ...prev, search: e.target.value }))}
               placeholder="Cari transaksi, rekening, kategori, pihak..."
@@ -643,6 +644,7 @@ export default function TransaksiPage() {
         {presetPeriode === 'rentang' && (
           <div className="flex gap-2">
             <input
+              suppressHydrationWarning
               type="date"
               value={rentangKustom.dari}
               onChange={(e) => {
@@ -654,6 +656,7 @@ export default function TransaksiPage() {
               className="flex-1 bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm"
             />
             <input
+              suppressHydrationWarning
               type="date"
               value={rentangKustom.sampai}
               onChange={(e) => {
@@ -669,6 +672,7 @@ export default function TransaksiPage() {
 
         <div className="flex items-center gap-2">
           <select
+            suppressHydrationWarning
             value={filter.warna}
             onChange={(e) => setFilter((prev) => ({ ...prev, warna: e.target.value as 'Semua' | WarnaHighlight }))}
             className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none focus:border-sky-500"
@@ -682,6 +686,7 @@ export default function TransaksiPage() {
           </select>
 
           <select
+            suppressHydrationWarning
             value={filter.rekening}
             onChange={(e) => setFilter((prev) => ({ ...prev, rekening: e.target.value }))}
             className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none focus:border-sky-500"

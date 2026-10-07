@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import {
   FileText,
   Printer,
+  Download,
   FileSpreadsheet,
   Filter,
   Calendar,
@@ -87,7 +88,7 @@ export default function LaporanPage() {
   const [jenis, setJenis] = useState<'ringkas' | 'detail'>('detail');
   const [sertakanBukti, setSertakanBukti] = useState(false);
   const [sertakanCatatan, setSertakanCatatan] = useState(true);
-  const [busy, setBusy] = useState<'' | 'ringkas' | 'detail'>('');
+  const [busy, setBusy] = useState<'' | 'ringkas' | 'detail' | 'pdf'>('');
 
   // Hitung filter object yang efektif berdasarkan mode yang dipilih
   const effectiveFilter: LaporanFilterOptions = useMemo(() => {
@@ -200,6 +201,90 @@ export default function LaporanPage() {
     if (effectiveFilter.tahun) params.set('tahun', effectiveFilter.tahun);
 
     window.open(`/reports/print?${params.toString()}`, '_blank');
+  }
+
+  async function unduhPdfLangsung() {
+    setBusy('pdf');
+    try {
+      const params = new URLSearchParams({
+        ws: init.active,
+        jenis,
+        bukti: sertakanBukti ? '1' : '0',
+        catatan: sertakanCatatan ? '1' : '0',
+      });
+
+      if (effectiveFilter.startDate) params.set('start', effectiveFilter.startDate);
+      if (effectiveFilter.endDate) params.set('end', effectiveFilter.endDate);
+      if (effectiveFilter.search) params.set('search', effectiveFilter.search);
+      if (effectiveFilter.tipe && effectiveFilter.tipe !== 'Semua') params.set('tipe', effectiveFilter.tipe);
+      if (effectiveFilter.kategori) params.set('kategori', effectiveFilter.kategori);
+      if (effectiveFilter.rekening) params.set('rekening', effectiveFilter.rekening);
+      if (effectiveFilter.warna && effectiveFilter.warna !== 'Semua') params.set('warna', effectiveFilter.warna);
+      if (effectiveFilter.tanggal) params.set('tanggal', effectiveFilter.tanggal);
+      if (effectiveFilter.bulan) params.set('bulan', effectiveFilter.bulan);
+      if (effectiveFilter.tahun) params.set('tahun', effectiveFilter.tahun);
+
+      const printUrl = `/reports/print?${params.toString()}`;
+
+      // Buat iframe tersembunyi untuk merender halaman cetak A4 dan mengunduh PDF secara langsung
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '-9999px';
+      iframe.style.width = '794px'; // A4 width at 96 DPI
+      iframe.style.height = '1123px'; // A4 height at 96 DPI
+      iframe.style.border = 'none';
+      iframe.src = printUrl;
+      document.body.appendChild(iframe);
+
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = async () => {
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) throw new Error('Iframe document tidak tersedia');
+
+            // Tunggu gambar selesai dimuat jika ada
+            const images = Array.from(doc.images);
+            await Promise.all(
+              images.map((img) => {
+                if (img.complete) return Promise.resolve();
+                return new Promise((res) => {
+                  img.onload = res;
+                  img.onerror = res;
+                });
+              })
+            );
+
+            // Render halaman PDF A4
+            const { downloadElementAsPdf } = await import('@/lib/report/generatePdf');
+            const rootEl = (doc.querySelector('.report-root') as HTMLElement) || doc.body;
+            const cleanPeriode = (effectiveFilter.startDate || effectiveFilter.bulan || 'laporan').replace(/[^\w-]/g, '_');
+            const filename = `Laporan_Keuangan_${init.active || 'Akun'}_${jenis}_${cleanPeriode}.pdf`;
+
+            await downloadElementAsPdf(rootEl, filename);
+            resolve();
+          } catch (err) {
+            reject(err);
+          } finally {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }
+        };
+        iframe.onerror = (err) => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          reject(err);
+        };
+      });
+    } catch (e) {
+      console.error('Gagal mengunduh PDF:', e);
+      alert('Gagal mengunduh file PDF secara otomatis. Membuka halaman cetak laporan...');
+      bukaCetakPDF();
+    } finally {
+      setBusy('');
+    }
   }
 
   async function unduhExcelRingkas() {
@@ -591,14 +676,30 @@ export default function LaporanPage() {
 
       {/* Tombol Aksi Export */}
       <div className="space-y-2.5 pt-1">
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={bukaCetakPDF}
-          className="w-full bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-sm font-bold py-3 rounded-2xl shadow-md shadow-sky-600/20 flex items-center justify-center gap-2 transition"
-        >
-          <Printer size={17} />
-          <span>Lihat &amp; Cetak Laporan PDF</span>
-        </motion.button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {/* Tombol 1: Unduh File PDF Langsung (A4) */}
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={unduhPdfLangsung}
+            disabled={busy === 'pdf'}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs sm:text-sm font-bold py-3 px-4 rounded-2xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition disabled:opacity-60"
+            title="Langsung unduh dokumen PDF format kertas A4"
+          >
+            <Download size={17} />
+            <span>{busy === 'pdf' ? 'Membuat PDF A4...' : 'Unduh File PDF (A4)'}</span>
+          </motion.button>
+
+          {/* Tombol 2: Lihat / Cetak Laporan PDF */}
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={bukaCetakPDF}
+            className="w-full bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-xs sm:text-sm font-bold py-3 px-4 rounded-2xl shadow-md shadow-sky-600/20 flex items-center justify-center gap-2 transition"
+            title="Buka halaman cetak laporan untuk melihat atau mencetak via browser"
+          >
+            <Printer size={17} />
+            <span>Lihat / Cetak Laporan PDF</span>
+          </motion.button>
+        </div>
 
         <div className="grid grid-cols-2 gap-2.5">
           <motion.button

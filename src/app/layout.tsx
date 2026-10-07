@@ -23,8 +23,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id">
-      <body className="text-slate-800 antialiased">{children}</body>
+    <html lang="id" suppressHydrationWarning>
+      <body className="text-slate-800 antialiased" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { motion } from 'motion/react';
 import { Wallet, LogIn, UserPlus, Sparkles, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk');
@@ -49,7 +51,8 @@ export default function LoginPage() {
           document.cookie = 'keuanganku_demo=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
           document.cookie = 'keuanganku_auth=1; path=/; max-age=2592000; SameSite=None; Secure';
           
-          window.location.replace('/ringkasan');
+          router.refresh();
+          router.replace('/ringkasan');
           return;
         }
       } catch (err: unknown) {
@@ -87,7 +90,8 @@ export default function LoginPage() {
           document.cookie = 'keuanganku_demo=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
           document.cookie = 'keuanganku_auth=1; path=/; max-age=2592000; SameSite=None; Secure';
           
-          window.location.replace('/ringkasan');
+          router.refresh();
+          router.replace('/ringkasan');
           return;
         } else {
           setPesan({
@@ -116,7 +120,8 @@ export default function LoginPage() {
       // ignore
     }
     document.cookie = 'keuanganku_demo=1; path=/; max-age=2592000; SameSite=None; Secure';
-    window.location.replace('/ringkasan');
+    router.refresh();
+    router.replace('/ringkasan');
   }
 
   return (
@@ -188,10 +193,11 @@ export default function LoginPage() {
         )}
 
         {/* Form Login / Signup Supabase */}
-        <form onSubmit={submit} className="space-y-3.5">
+        <form onSubmit={submit} className="space-y-3.5" suppressHydrationWarning>
           <div>
             <label className="text-xs font-semibold text-slate-700">Email Database Supabase</label>
             <input
+              suppressHydrationWarning
               type="email"
               required
               value={email}
@@ -204,6 +210,7 @@ export default function LoginPage() {
           <div>
             <label className="text-xs font-semibold text-slate-700">Password</label>
             <input
+              suppressHydrationWarning
               type="password"
               required
               minLength={6}
