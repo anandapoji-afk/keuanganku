@@ -52,20 +52,25 @@ function normalizeText(value: string): string {
 }
 
 function matchesDynamicFilter(row: Transaction, filter: TransaksiFilterState): boolean {
-  const text = normalizeText(filter.search);
-  if (text) {
-    const haystack = [
-      row.keterangan,
-      row.kategori,
-      row.sub_kategori,
-      row.rekening,
-      row.pihak_terkait,
-      row.catatan,
-    ]
-      .join(' ')
-      .toLowerCase();
+  if (filter.search) {
+    const raw = filter.search.toLowerCase();
+    const cleaned = raw.replace(/»/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned) {
+      const haystack = [
+        row.keterangan,
+        row.kategori,
+        row.sub_kategori,
+        row.rekening,
+        row.pihak_terkait,
+        row.catatan,
+      ]
+        .join(' ')
+        .toLowerCase();
 
-    if (!haystack.includes(text)) return false;
+      const tokens = cleaned.split(' ').filter(Boolean);
+      const allTokensMatch = tokens.every((token) => haystack.includes(token));
+      if (!haystack.includes(cleaned) && !allTokensMatch) return false;
+    }
   }
 
   if (filter.tipe !== 'Semua' && row.tipe !== filter.tipe) return false;
@@ -104,6 +109,18 @@ function matchesDynamicFilter(row: Transaction, filter: TransaksiFilterState): b
   return true;
 }
 
+function bandingkanTransaksiBaruKeLama(a: Transaction, b: Transaction): number {
+  const tglA = a.tanggal || '';
+  const tglB = b.tanggal || '';
+  if (tglB !== tglA) return tglB.localeCompare(tglA);
+  const jamA = a.jam || '00:00';
+  const jamB = b.jam || '00:00';
+  if (jamB !== jamA) return jamB.localeCompare(jamA);
+  const crA = a.created_at || '';
+  const crB = b.created_at || '';
+  return crB.localeCompare(crA);
+}
+
 const AppDataContext = createContext<AppDataState | null>(null);
 
 export function useAppData() {
@@ -124,12 +141,7 @@ export default function AppDataProvider({ children }: { children: React.ReactNod
     return transaksi
       .filter((row) => matchesDynamicFilter(row, filter))
       .slice()
-      .sort((a, b) => {
-        const aTime = new Date(`${a.tanggal}T${a.jam || '00:00'}:00`).getTime();
-        const bTime = new Date(`${b.tanggal}T${b.jam || '00:00'}:00`).getTime();
-        if (bTime !== aTime) return bTime - aTime;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
+      .sort(bandingkanTransaksiBaruKeLama);
   }, [filter, transaksi]);
 
   const clearFilter = useCallback(() => setFilter(FILTER_KOSONG), []);

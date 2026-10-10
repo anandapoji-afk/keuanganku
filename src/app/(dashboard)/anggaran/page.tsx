@@ -75,15 +75,18 @@ export default function AnggaranPage() {
   // ===== Rekap Sub Kategori Pengeluaran: total per sub kategori (lintas
   // kategori), mengikuti filter periode aktif =====
   const rekapSubKategori = useMemo(() => {
-    const totals: Record<string, number> = {};
+    const totals: Record<string, { kategori: string; subKategori: string; total: number }> = {};
     filteredTransaksi.forEach((t) => {
       if (t.tipe !== 'Pengeluaran' || !t.sub_kategori) return;
-      const key = `${t.kategori} » ${t.sub_kategori}`;
-      totals[key] = (totals[key] || 0) + t.nominal;
+      const key = `${t.kategori}___${t.sub_kategori}`;
+      if (!totals[key]) {
+        totals[key] = { kategori: t.kategori, subKategori: t.sub_kategori, total: 0 };
+      }
+      totals[key].total += t.nominal;
     });
-    return Object.entries(totals)
-      .filter(([, v]) => v !== 0)
-      .sort((a, b) => b[1] - a[1]);
+    return Object.values(totals)
+      .filter((item) => item.total !== 0)
+      .sort((a, b) => b.total - a.total);
   }, [filteredTransaksi]);
 
   function bukaSetAnggaran(kategoriAwal?: string) {
@@ -101,9 +104,11 @@ export default function AnggaranPage() {
     tipe: 'Pemasukan' | 'Pengeluaran';
     search?: string;
   }) {
+    // Hilangkan karakter » dan bersihkan spasi ganda agar filter transaksi terbaca akurat
+    const cleanSearch = (search || '').replace(/»/g, ' ').replace(/\s+/g, ' ').trim();
     setFilter((prev) => ({
       ...prev,
-      search: search || '',
+      search: cleanSearch,
       kategori: kategori || '',
       tipe,
     }));
@@ -225,14 +230,24 @@ export default function AnggaranPage() {
           <div className="text-xs text-slate-400 italic py-3">Belum ada transaksi atau anggaran sub kategori di periode ini.</div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-            {rekapSubKategori.map(([label, total]) => (
+            {rekapSubKategori.map((item) => (
               <button
-                key={label}
-                onClick={() => bukaFilterKartu({ kategori: label.split(' » ')[0] || '', tipe: 'Pengeluaran', search: label })}
-                className="w-full px-4 py-2.5 flex justify-between items-center text-sm text-left"
+                key={`${item.kategori}___${item.subKategori}`}
+                onClick={() =>
+                  bukaFilterKartu({
+                    kategori: item.kategori,
+                    tipe: 'Pengeluaran',
+                    search: item.subKategori,
+                  })
+                }
+                className="w-full px-4 py-2.5 flex justify-between items-center text-sm text-left hover:bg-slate-50 transition"
               >
-                <span className="text-slate-600">{label}</span>
-                <span className="font-semibold text-slate-800">{rp(total)}</span>
+                <span className="text-slate-600 flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium">{item.kategori}</span>
+                  <span className="text-slate-400 text-xs">/</span>
+                  <span className="text-slate-700">{item.subKategori}</span>
+                </span>
+                <span className="font-semibold text-slate-800">{rp(item.total)}</span>
               </button>
             ))}
           </div>

@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer, Archive, Download, UploadCloud, GripVertical, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { Search, Plus, X, ArrowDownLeft, ArrowUpRight, Filter, Receipt, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Printer, Archive, Download, UploadCloud, GripVertical, ChevronLeft, ChevronRight, Image as ImageIcon, CalendarRange, Calendar } from 'lucide-react';
 import JSZip from 'jszip';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
-import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex } from '@/lib/utils';
+import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex, formatBulanIndo } from '@/lib/utils';
 import { simpanTransaksi, hapusTransaksi, simpanHighlightCatatan } from '@/lib/actions/transaksi';
 import type { SimpanTransaksiPayload, Transaction, Tipe, StatusBayar, WarnaHighlight } from '@/lib/types';
 
@@ -118,20 +118,52 @@ const LABEL_ARAH: Record<'date' | 'number' | 'text' | 'timestamp', { asc: string
   text: { asc: 'A \u2192 Z', desc: 'Z \u2192 A' },
 };
 
+const DEFAULT_SORT: AturanSort[] = [{ kolom: 'tanggal', arah: 'desc' }];
+
 function bandingkanTransaksi(a: Transaction, b: Transaction, kolom: KolomSort): number {
   switch (kolom) {
-    case 'tanggal':
-      return `${a.tanggal} ${a.jam || '00:00'}`.localeCompare(`${b.tanggal} ${b.jam || '00:00'}`);
+    case 'tanggal': {
+      const cmpTgl = (a.tanggal || '').localeCompare(b.tanggal || '');
+      if (cmpTgl !== 0) return cmpTgl;
+      const cmpJam = (a.jam || '00:00').localeCompare(b.jam || '00:00');
+      if (cmpJam !== 0) return cmpJam;
+      return (a.created_at || '').localeCompare(b.created_at || '');
+    }
     case 'nominal':
       return (Number(a.nominal) || 0) - (Number(b.nominal) || 0);
     case 'created_at':
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return (a.created_at || '').localeCompare(b.created_at || '');
     default:
       return String(a[kolom] || '').localeCompare(String(b[kolom] || ''), 'id', { sensitivity: 'base' });
   }
 }
 
-type PresetPeriode = 'semua' | 'hari' | 'bulan' | 'tahun' | 'rentang';
+type PresetPeriode = 'semua' | 'hari' | 'bulan' | 'jarak_bulan' | 'pilih_bulan' | 'rentang' | 'tahun';
+
+function awalBulanDariIso(bulanStr: string): string {
+  if (!bulanStr) return '';
+  const [y, m] = bulanStr.split('-').map(Number);
+  if (!y || !m) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${y}-${pad(m)}-01`;
+}
+
+function akhirBulanDariIso(bulanStr: string): string {
+  if (!bulanStr) return '';
+  const [y, m] = bulanStr.split('-').map(Number);
+  if (!y || !m) return '';
+  const lastDay = new Date(y, m, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${y}-${pad(m)}-${pad(lastDay)}`;
+}
+
+function getBulanIsoRelatif(deltaBulan: number): string {
+  const d = new Date();
+  d.setDate(1); // Mencegah bug loncat bulan di tanggal 31
+  d.setMonth(d.getMonth() + deltaBulan);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
 
 // Palet chip kategori — kategori yang sama selalu dapat warna yang sama,
 // dipilih lewat hash sederhana dari nama kategori (bukan mapping manual),
@@ -196,6 +228,8 @@ export default function TransaksiPage() {
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [presetPeriode, setPresetPeriode] = useState<PresetPeriode>('bulan');
   const [rentangKustom, setRentangKustom] = useState({ dari: '', sampai: '' });
+  const [rentangBulan, setRentangBulan] = useState<{ dari: string; sampai: string }>({ dari: '', sampai: '' });
+  const [pilihBulan, setPilihBulan] = useState('');
 
   // Buat object URL sekali per perubahan fileBaru, bukan setiap render —
   // mencegah memory leak dan mismatch URL saat preview dibuka.
@@ -219,14 +253,19 @@ export default function TransaksiPage() {
 
   const listTampil = filteredTransaksi;
 
-  const [aturanSort, setAturanSort] = useState<AturanSort[]>([]);
+  // Default pengurutan transaksi otomatis ke "Tanggal: Baru ke Lama"
+  const [aturanSort, setAturanSort] = useState<AturanSort[]>(DEFAULT_SORT);
 
-  // Tanpa aturan: urutan bawaan (tanggal & jam terbaru di atas). Dengan aturan:
-  // urut berjenjang sesuai urutan aturan; sort stabil jadi seri tetap urutan bawaan.
+  // Saat filter apa pun diterapkan atau berubah, pastikan urutan tanggal Baru ke Lama otomatis menjadi default
+  useEffect(() => {
+    setAturanSort(DEFAULT_SORT);
+  }, [filter]);
+
+  // Urut berjenjang sesuai aturan; jika aturan kosong otomatis pakai DEFAULT_SORT (Tanggal: Baru ke Lama)
   const listUrut = useMemo(() => {
-    if (aturanSort.length === 0) return listTampil;
+    const aturan = aturanSort.length > 0 ? aturanSort : DEFAULT_SORT;
     return listTampil.slice().sort((a, b) => {
-      for (const r of aturanSort) {
+      for (const r of aturan) {
         const hasil = bandingkanTransaksi(a, b, r.kolom);
         if (hasil !== 0) return r.arah === 'asc' ? hasil : -hasil;
       }
@@ -247,11 +286,68 @@ export default function TransaksiPage() {
     return { masuk, keluar };
   }, [listTampil]);
 
+  function ubahRentangBulan(patch: Partial<{ dari: string; sampai: string }>) {
+    const next = { ...rentangBulan, ...patch };
+    setRentangBulan(next);
+    setAturanSort(DEFAULT_SORT);
+
+    let start = next.dari;
+    let end = next.sampai;
+    if (start && end && start > end) {
+      const temp = start;
+      start = end;
+      end = temp;
+    }
+
+    const startDate = start ? awalBulanDariIso(start) : '';
+    const endDate = end ? akhirBulanDariIso(end) : (start ? akhirBulanDariIso(start) : '');
+
+    setFilter((prev) => ({
+      ...prev,
+      tanggal: '',
+      bulan: '',
+      tahun: '',
+      startDate,
+      endDate,
+    }));
+  }
+
+  function ubahPilihBulan(isoBulan: string) {
+    setPilihBulan(isoBulan);
+    setAturanSort(DEFAULT_SORT);
+    setFilter((prev) => ({
+      ...prev,
+      tanggal: '',
+      bulan: isoBulan,
+      tahun: '',
+      startDate: '',
+      endDate: '',
+    }));
+  }
+
+  function ubahRentangTanggal(patch: Partial<{ dari: string; sampai: string }>) {
+    const next = { ...rentangKustom, ...patch };
+    setRentangKustom(next);
+    setAturanSort(DEFAULT_SORT);
+    const aktif = rentangDariPreset('rentang', next);
+    setFilter((prev) => ({
+      ...prev,
+      tanggal: '',
+      bulan: '',
+      tahun: '',
+      startDate: aktif?.dari || '',
+      endDate: aktif?.sampai || '',
+    }));
+  }
+
   function applyPresetPreset(nextPreset: PresetPeriode) {
+    setAturanSort(DEFAULT_SORT);
     if (nextPreset === 'semua') {
       setPresetPeriode('semua');
       clearFilter();
       setRentangKustom({ dari: '', sampai: '' });
+      setRentangBulan({ dari: '', sampai: '' });
+      setPilihBulan('');
       return;
     }
 
@@ -261,16 +357,74 @@ export default function TransaksiPage() {
     const tahunIni = String(today.getFullYear());
 
     setPresetPeriode(nextPreset);
-    const aktif = rentangDariPreset(nextPreset, rentangKustom);
 
-    setFilter((prev) => ({
-      ...prev,
-      tanggal: nextPreset === 'hari' ? hariIni : '',
-      bulan: nextPreset === 'bulan' ? bulanIni : '',
-      tahun: nextPreset === 'tahun' ? tahunIni : '',
-      startDate: nextPreset === 'rentang' ? aktif?.dari || '' : '',
-      endDate: nextPreset === 'rentang' ? aktif?.sampai || '' : '',
-    }));
+    if (nextPreset === 'hari') {
+      setFilter((prev) => ({
+        ...prev,
+        tanggal: hariIni,
+        bulan: '',
+        tahun: '',
+        startDate: '',
+        endDate: '',
+      }));
+    } else if (nextPreset === 'bulan') {
+      setFilter((prev) => ({
+        ...prev,
+        tanggal: '',
+        bulan: bulanIni,
+        tahun: '',
+        startDate: '',
+        endDate: '',
+      }));
+    } else if (nextPreset === 'jarak_bulan') {
+      let dari = rentangBulan.dari;
+      let sampai = rentangBulan.sampai;
+      if (!dari && !sampai) {
+        dari = getBulanIsoRelatif(-2); // 3 bulan terakhir (2 bulan lalu s/d bulan ini)
+        sampai = bulanIni;
+        setRentangBulan({ dari, sampai });
+      }
+      const startDate = dari ? awalBulanDariIso(dari) : '';
+      const endDate = sampai ? akhirBulanDariIso(sampai) : (dari ? akhirBulanDariIso(dari) : '');
+      setFilter((prev) => ({
+        ...prev,
+        tanggal: '',
+        bulan: '',
+        tahun: '',
+        startDate,
+        endDate,
+      }));
+    } else if (nextPreset === 'pilih_bulan') {
+      const b = pilihBulan || bulanIni;
+      setPilihBulan(b);
+      setFilter((prev) => ({
+        ...prev,
+        tanggal: '',
+        bulan: b,
+        tahun: '',
+        startDate: '',
+        endDate: '',
+      }));
+    } else if (nextPreset === 'tahun') {
+      setFilter((prev) => ({
+        ...prev,
+        tanggal: '',
+        bulan: '',
+        tahun: tahunIni,
+        startDate: '',
+        endDate: '',
+      }));
+    } else if (nextPreset === 'rentang') {
+      const aktif = rentangDariPreset('rentang', rentangKustom);
+      setFilter((prev) => ({
+        ...prev,
+        tanggal: '',
+        bulan: '',
+        tahun: '',
+        startDate: aktif?.dari || '',
+        endDate: aktif?.sampai || '',
+      }));
+    }
   }
 
   function applyQuickFilter(patch: Partial<typeof filter>) {
@@ -595,18 +749,34 @@ export default function TransaksiPage() {
             <input
               suppressHydrationWarning
               value={filter.search}
-              onChange={(e) => setFilter((prev) => ({ ...prev, search: e.target.value }))}
+              onChange={(e) => {
+                setFilter((prev) => ({ ...prev, search: e.target.value }));
+                setAturanSort(DEFAULT_SORT);
+              }}
               placeholder="Cari transaksi, rekening, kategori, pihak..."
               className="w-full bg-white border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 rounded-xl pl-9 pr-3 py-2 text-xs shadow-sm transition outline-none"
             />
           </div>
-          {Object.values(filter).some((v) => typeof v === 'string' ? v !== '' : false) && (
+          {(Boolean(filter.search) ||
+            filter.tipe !== 'Semua' ||
+            filter.warna !== 'Semua' ||
+            Boolean(filter.rekening) ||
+            Boolean(filter.kategori) ||
+            Boolean(filter.tanggal) ||
+            Boolean(filter.bulan) ||
+            Boolean(filter.tahun) ||
+            Boolean(filter.startDate) ||
+            Boolean(filter.endDate) ||
+            presetPeriode !== 'bulan') && (
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => {
                 clearFilter();
                 setPresetPeriode('semua');
                 setRentangKustom({ dari: '', sampai: '' });
+                setRentangBulan({ dari: '', sampai: '' });
+                setPilihBulan('');
+                setAturanSort(DEFAULT_SORT);
               }}
               className="flex items-center gap-1 text-[11px] font-medium text-rose-600 bg-rose-50 border border-rose-200/80 rounded-xl px-2.5 py-2 whitespace-nowrap shadow-sm hover:bg-rose-100 transition"
             >
@@ -621,8 +791,10 @@ export default function TransaksiPage() {
             [
               { v: 'hari', label: 'Hari Ini' },
               { v: 'bulan', label: 'Bulan Ini' },
+              { v: 'jarak_bulan', label: 'Jarak Bulan' },
+              { v: 'pilih_bulan', label: 'Pilih Bulan' },
+              { v: 'rentang', label: 'Rentang Tanggal' },
               { v: 'tahun', label: 'Tahun Ini' },
-              { v: 'rentang', label: 'Rentang' },
               { v: 'semua', label: 'Semua' },
             ] as const
           ).map((p) => (
@@ -641,32 +813,199 @@ export default function TransaksiPage() {
           ))}
         </div>
 
+        {/* Panel Filter Jarak Pilih Bulan */}
+        {presetPeriode === 'jarak_bulan' && (
+          <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between flex-wrap gap-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                <CalendarRange size={14} className="text-sky-600" />
+                <span>Filter Jarak Pilih Bulan</span>
+              </div>
+              {rentangBulan.dari && rentangBulan.sampai && (
+                <span className="text-[11px] text-sky-700 font-medium bg-sky-100/70 border border-sky-200 px-2 py-0.5 rounded-lg">
+                  {formatBulanIndo(rentangBulan.dari)} s/d {formatBulanIndo(rentangBulan.sampai)}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Dari Bulan
+                </label>
+                <input
+                  suppressHydrationWarning
+                  type="month"
+                  value={rentangBulan.dari}
+                  onChange={(e) => ubahRentangBulan({ dari: e.target.value })}
+                  className="w-full bg-white border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none transition"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Sampai Bulan
+                </label>
+                <input
+                  suppressHydrationWarning
+                  type="month"
+                  value={rentangBulan.sampai}
+                  onChange={(e) => ubahRentangBulan({ sampai: e.target.value })}
+                  className="w-full bg-white border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none transition"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1 border-t border-slate-200/60">
+              <div className="text-[10px] font-medium text-slate-400 mb-1.5">Pilihan Cepat Jarak Bulan:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: '3 Bulan Terakhir',
+                    dari: getBulanIsoRelatif(-2),
+                    sampai: getBulanIsoRelatif(0),
+                  },
+                  {
+                    label: '6 Bulan Terakhir',
+                    dari: getBulanIsoRelatif(-5),
+                    sampai: getBulanIsoRelatif(0),
+                  },
+                  {
+                    label: 'Kuartal 1 (Jan - Mar)',
+                    dari: `${new Date().getFullYear()}-01`,
+                    sampai: `${new Date().getFullYear()}-03`,
+                  },
+                  {
+                    label: 'Kuartal 2 (Apr - Jun)',
+                    dari: `${new Date().getFullYear()}-04`,
+                    sampai: `${new Date().getFullYear()}-06`,
+                  },
+                  {
+                    label: 'Kuartal 3 (Jul - Sep)',
+                    dari: `${new Date().getFullYear()}-07`,
+                    sampai: `${new Date().getFullYear()}-09`,
+                  },
+                  {
+                    label: 'Kuartal 4 (Okt - Des)',
+                    dari: `${new Date().getFullYear()}-10`,
+                    sampai: `${new Date().getFullYear()}-12`,
+                  },
+                  {
+                    label: 'Semester 1 (Jan - Jun)',
+                    dari: `${new Date().getFullYear()}-01`,
+                    sampai: `${new Date().getFullYear()}-06`,
+                  },
+                  {
+                    label: 'Semester 2 (Jul - Des)',
+                    dari: `${new Date().getFullYear()}-07`,
+                    sampai: `${new Date().getFullYear()}-12`,
+                  },
+                ].map((c) => {
+                  const isAktif = rentangBulan.dari === c.dari && rentangBulan.sampai === c.sampai;
+                  return (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => ubahRentangBulan({ dari: c.dari, sampai: c.sampai })}
+                      className={`text-[10.5px] px-2.5 py-1 rounded-lg border transition font-medium ${
+                        isAktif
+                          ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Panel Filter Pilih 1 Bulan Tertentu */}
+        {presetPeriode === 'pilih_bulan' && (
+          <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3 shadow-sm space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                <Calendar size={14} className="text-sky-600" />
+                <span>Pilih 1 Bulan Tertentu</span>
+              </div>
+              {pilihBulan && (
+                <span className="text-[11px] text-sky-700 font-medium bg-sky-100/70 border border-sky-200 px-2 py-0.5 rounded-lg">
+                  {formatBulanIndo(pilihBulan)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                suppressHydrationWarning
+                type="month"
+                value={pilihBulan}
+                onChange={(e) => ubahPilihBulan(e.target.value)}
+                className="flex-1 bg-white border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none transition"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                  ubahPilihBulan(cur);
+                }}
+                className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-xl whitespace-nowrap shadow-sm"
+              >
+                Bulan Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  now.setDate(1);
+                  now.setMonth(now.getMonth() - 1);
+                  const val = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                  ubahPilihBulan(val);
+                }}
+                className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200 hover:border-slate-300 px-2.5 py-1.5 rounded-xl whitespace-nowrap shadow-sm"
+              >
+                Bulan Lalu
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Panel Filter Rentang Tanggal Spesifik */}
         {presetPeriode === 'rentang' && (
-          <div className="flex gap-2">
-            <input
-              suppressHydrationWarning
-              type="date"
-              value={rentangKustom.dari}
-              onChange={(e) => {
-                const next = { ...rentangKustom, dari: e.target.value };
-                setRentangKustom(next);
-                const aktif = rentangDariPreset('rentang', next);
-                setFilter((prev) => ({ ...prev, startDate: aktif?.dari || '', endDate: aktif?.sampai || '' }));
-              }}
-              className="flex-1 bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm"
-            />
-            <input
-              suppressHydrationWarning
-              type="date"
-              value={rentangKustom.sampai}
-              onChange={(e) => {
-                const next = { ...rentangKustom, sampai: e.target.value };
-                setRentangKustom(next);
-                const aktif = rentangDariPreset('rentang', next);
-                setFilter((prev) => ({ ...prev, startDate: aktif?.dari || '', endDate: aktif?.sampai || '' }));
-              }}
-              className="flex-1 bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm"
-            />
+          <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3 shadow-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-slate-800">
+                Rentang Tanggal Spesifik
+              </div>
+              {rentangKustom.dari && rentangKustom.sampai && (
+                <span className="text-[11px] text-sky-700 font-medium bg-sky-100/70 border border-sky-200 px-2 py-0.5 rounded-lg">
+                  {rentangKustom.dari} s/d {rentangKustom.sampai}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">Dari Tanggal</label>
+                <input
+                  suppressHydrationWarning
+                  type="date"
+                  value={rentangKustom.dari}
+                  onChange={(e) => ubahRentangTanggal({ dari: e.target.value })}
+                  className="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">Sampai Tanggal</label>
+                <input
+                  suppressHydrationWarning
+                  type="date"
+                  value={rentangKustom.sampai}
+                  onChange={(e) => ubahRentangTanggal({ sampai: e.target.value })}
+                  className="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-1.5 text-xs shadow-sm outline-none"
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -674,7 +1013,10 @@ export default function TransaksiPage() {
           <select
             suppressHydrationWarning
             value={filter.warna}
-            onChange={(e) => setFilter((prev) => ({ ...prev, warna: e.target.value as 'Semua' | WarnaHighlight }))}
+            onChange={(e) => {
+              setFilter((prev) => ({ ...prev, warna: e.target.value as 'Semua' | WarnaHighlight }));
+              setAturanSort(DEFAULT_SORT);
+            }}
             className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none focus:border-sky-500"
           >
             <option value="Semua">Semua warna highlight</option>
@@ -688,7 +1030,10 @@ export default function TransaksiPage() {
           <select
             suppressHydrationWarning
             value={filter.rekening}
-            onChange={(e) => setFilter((prev) => ({ ...prev, rekening: e.target.value }))}
+            onChange={(e) => {
+              setFilter((prev) => ({ ...prev, rekening: e.target.value }));
+              setAturanSort(DEFAULT_SORT);
+            }}
             className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 shadow-sm outline-none focus:border-sky-500"
           >
             <option value="">Semua rekening</option>
@@ -705,7 +1050,10 @@ export default function TransaksiPage() {
             <motion.button
               key={f}
               whileTap={{ scale: 0.94 }}
-              onClick={() => setFilter((prev) => ({ ...prev, tipe: f }))}
+              onClick={() => {
+                setFilter((prev) => ({ ...prev, tipe: f }));
+                setAturanSort(DEFAULT_SORT);
+              }}
               className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filter.tipe === f
                   ? 'bg-white text-slate-900 shadow-sm font-semibold'
@@ -1440,14 +1788,20 @@ function SortMenu({ aturan, onTerapkan }: { aturan: AturanSort[]; onTerapkan: (a
       <button
         type="button"
         onClick={toggle}
-        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition active:scale-95 ${
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition active:scale-95 ${
           aturan.length > 0 ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-white border-slate-200 text-slate-600'
         }`}
       >
         <ArrowUpDown size={13} />
-        Urutkan
+        <span>Urutkan</span>
         {aturan.length > 0 && (
-          <span className="min-w-[16px] h-4 px-1 rounded-full bg-sky-600 text-white text-[10px] leading-4 text-center">{aturan.length}</span>
+          <span className="text-[10px] font-medium bg-sky-200/80 text-sky-800 px-1.5 py-0.5 rounded-md">
+            {aturan[0].kolom === 'tanggal'
+              ? aturan[0].arah === 'desc'
+                ? 'Baru → Lama'
+                : 'Lama → Baru'
+              : `${aturan[0].kolom} (${aturan[0].arah})`}
+          </span>
         )}
       </button>
 

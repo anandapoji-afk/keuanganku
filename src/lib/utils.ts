@@ -1,9 +1,21 @@
 import type { WarnaHighlight } from './types';
 
-const NAMA_BULAN = [
+export const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
+
+export function formatBulanIndo(isoBulan?: string | null): string {
+  if (!isoBulan) return '';
+  const parts = isoBulan.split('-');
+  if (parts.length < 2) return isoBulan;
+  const y = parts[0];
+  const m = parseInt(parts[1], 10);
+  if (m >= 1 && m <= 12) {
+    return `${NAMA_BULAN[m - 1]} ${y}`;
+  }
+  return isoBulan;
+}
 
 // Padanan formatTanggalIndo(dateStr) di Kode.gs
 export function formatTanggalIndo(dateStr: string | Date): string {

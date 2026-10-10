@@ -5,8 +5,9 @@ export function matchesTransaksiFilter(row: Transaction, filter?: LaporanFilterO
   if (!filter) return true;
 
   if (filter.search) {
-    const text = filter.search.trim().toLowerCase();
-    if (text) {
+    const raw = filter.search.toLowerCase();
+    const cleaned = raw.replace(/»/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned) {
       const haystack = [
         row.keterangan,
         row.kategori,
@@ -18,7 +19,9 @@ export function matchesTransaksiFilter(row: Transaction, filter?: LaporanFilterO
         .join(' ')
         .toLowerCase();
 
-      if (!haystack.includes(text)) return false;
+      const tokens = cleaned.split(' ').filter(Boolean);
+      const allTokensMatch = tokens.every((token) => haystack.includes(token));
+      if (!haystack.includes(cleaned) && !allTokensMatch) return false;
     }
   }
 
