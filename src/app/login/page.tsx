@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { motion } from 'motion/react';
@@ -13,6 +13,15 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk');
   const [pesan, setPesan] = useState<{ tipe: 'error' | 'sukses'; teks: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Cache data lokal milik sesi sebelumnya tidak boleh terlihat oleh akun yang baru login.
+  useEffect(() => {
+    try {
+      localStorage.removeItem('keuanganku:data:v1');
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Masuk dengan email & password akun Supabase asli
   async function submit(e: React.FormEvent) {

@@ -60,6 +60,22 @@ export async function requireUser(): Promise<{ supabase: SupabaseClient; user: U
 
   try {
     const supabase = await createClient();
+
+    // getClaims() memverifikasi JWT secara LOKAL (via JWKS yang di-cache) tanpa
+    // round-trip jaringan ke Supabase Auth — jauh lebih cepat dari getUser()
+    // yang dulu dipanggil di SETIAP server action. Kalau project masih memakai
+    // JWT secret lama (HS256), library otomatis fallback ke panggilan jaringan,
+    // jadi perilaku tidak lebih buruk dari sebelumnya. Hanya `user.id` yang
+    // dipakai action, dan RLS di database tetap memverifikasi token.
+    const { data: claimsData } = await supabase.auth.getClaims();
+    const claims = claimsData?.claims;
+    if (claims?.sub) {
+      return {
+        supabase,
+        user: { id: claims.sub, email: claims.email } as unknown as User,
+      };
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();

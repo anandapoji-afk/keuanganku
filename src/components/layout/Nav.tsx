@@ -226,6 +226,7 @@ export function TopBar() {
     try {
       localStorage.removeItem('keuanganku_auth');
       localStorage.removeItem('keuanganku_demo');
+      localStorage.removeItem('keuanganku:data:v1');
       localStorage.setItem('keuanganku_logged_out', '1');
     } catch {
       // ignore

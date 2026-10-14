@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { getInitWorkspaceData, ambilPreferensiUser, simpanPreferensiUser, setupDefaultWorkspaceJikaBelumAda } from '@/lib/actions/workspace';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { getBootstrapData } from '@/lib/actions/workspace';
 import { getRiwayatTransaksi } from '@/lib/actions/transaksi';
 import type { InitWorkspaceData, Transaction, Budget, TabunganGabungan, Tipe, WarnaHighlight } from '@/lib/types';
 
@@ -121,6 +121,38 @@ function bandingkanTransaksiBaruKeLama(a: Transaction, b: Transaction): number {
   return crB.localeCompare(crA);
 }
 
+// ---- Cache lokal (stale-while-revalidate) ----
+// Data terakhir disimpan di localStorage. Saat aplikasi dibuka lagi, data lama
+// langsung tampil (tanpa skeleton), sementara data terbaru diambil di latar
+// belakang lalu menggantikannya. Dihapus saat logout / buka halaman login.
+const CACHE_KEY = 'keuanganku:data:v1';
+
+interface CachePayload {
+  init: InitWorkspaceData;
+  transaksi: Transaction[];
+  anggaran: Budget[];
+  tabungan: TabunganGabungan[];
+}
+
+function bacaCache(): CachePayload | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as CachePayload;
+    return p?.init?.active ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function tulisCache(p: CachePayload) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(p));
+  } catch {
+    // kuota penuh / mode privat — cache dilewati saja
+  }
+}
+
 const AppDataContext = createContext<AppDataState | null>(null);
 
 export function useAppData() {
@@ -156,38 +188,46 @@ export default function AppDataProvider({ children }: { children: React.ReactNod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [init.active]);
 
-  const refetchAll = useCallback(async () => {
-    setLoading(true);
-    await setupDefaultWorkspaceJikaBelumAda();
-    const pref = await ambilPreferensiUser();
-    const wsAktif = (pref?.workspace as string | undefined) || undefined;
-    const data = await getInitWorkspaceData(wsAktif);
-    setInit(data);
-    if (data.active) {
-      const r = await getRiwayatTransaksi(data.active);
-      setTransaksi(r.transaksi);
-      setAnggaran(r.anggaran);
-      setTabungan(r.tabungan);
+  // Penomoran permintaan: hasil permintaan lama (mis. refresh latar belakang
+  // yang telat selesai) dibuang kalau sudah ada permintaan yang lebih baru.
+  const seq = useRef(0);
+
+  const muatAwal = useCallback(async (opts: { senyap?: boolean; ws?: string } = {}) => {
+    const id = ++seq.current;
+    if (!opts.senyap) setLoading(true);
+    try {
+      const { init: data, riwayat } = await getBootstrapData(opts.ws);
+      if (id !== seq.current) return;
+      setInit(data);
+      setTransaksi(riwayat.transaksi);
+      setAnggaran(riwayat.anggaran);
+      setTabungan(riwayat.tabungan);
+    } finally {
+      if (id === seq.current) setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  const gantiWorkspace = useCallback(async (ws: string) => {
-    setLoading(true);
-    const data = await getInitWorkspaceData(ws);
-    setInit(data);
-    await simpanPreferensiUser({ workspace: ws });
-    const r = await getRiwayatTransaksi(ws);
-    setTransaksi(r.transaksi);
-    setAnggaran(r.anggaran);
-    setTabungan(r.tabungan);
-    setLoading(false);
-  }, []);
+  const refetchAll = useCallback(() => muatAwal(), [muatAwal]);
+  const gantiWorkspace = useCallback((ws: string) => muatAwal({ ws }), [muatAwal]);
 
   useEffect(() => {
-    refetchAll();
+    const cache = bacaCache();
+    if (cache) {
+      setInit(cache.init);
+      setTransaksi(cache.transaksi);
+      setAnggaran(cache.anggaran);
+      setTabungan(cache.tabungan);
+      setLoading(false);
+    }
+    muatAwal({ senyap: !!cache });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Simpan snapshot terbaru setiap kali data selesai dimuat / berubah.
+  useEffect(() => {
+    if (loading || !init.active) return;
+    tulisCache({ init, transaksi, anggaran, tabungan });
+  }, [loading, init, transaksi, anggaran, tabungan]);
 
   return (
     <AppDataContext.Provider
