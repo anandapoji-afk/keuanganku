@@ -2,16 +2,14 @@
 
 import { requireUser } from '@/lib/supabase/server';
 import { resolveWorkspaceId } from './workspace';
+import { parseCatatanRange, ambilRiwayatRaw, bangunRiwayat, RIWAYAT_KOSONG } from '@/lib/data/loaders';
 import { uploadBuktiKeSupabaseStorage, hapusBuktiDariSupabaseStorage } from './upload';
 import { getJamSekarang, kapitalisasiKata, buatId } from '@/lib/utils';
 import type {
   ActionResult,
   SimpanTransaksiPayload,
   SimpanHighlightCatatanPayload,
-  Transaction,
-  Budget,
   RiwayatTransaksi,
-  TabunganGabungan,
 } from '@/lib/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -52,22 +50,12 @@ export async function recalculateBalance(supabase: SupabaseClient, workspaceId: 
   await supabase.from('transactions').upsert(updates, { onConflict: 'id' });
 }
 
-const RANGE_REGEX = /<!--range:([0-9-]+)-->/;
-
 function formatCatatanWithRange(catatan: string, sampaiTanggal?: string | null): string {
   const clean = (catatan || '').replace(/<!--range:.*?-->/g, '').trim();
   if (sampaiTanggal && sampaiTanggal.trim()) {
     return clean ? `${clean} <!--range:${sampaiTanggal.trim()}-->` : `<!--range:${sampaiTanggal.trim()}-->`;
   }
   return clean;
-}
-
-function parseCatatanRange(rawCatatan: string): { catatan: string; sampaiTanggal: string | null } {
-  if (!rawCatatan) return { catatan: '', sampaiTanggal: null };
-  const match = rawCatatan.match(RANGE_REGEX);
-  const sampaiTanggal = match ? match[1] : null;
-  const catatan = rawCatatan.replace(/<!--range:.*?-->/g, '').trim();
-  return { catatan, sampaiTanggal };
 }
 
 // Padanan simpanTransaksi(formObject) — mode tambah baru & edit sekaligus.
@@ -311,46 +299,6 @@ export async function hapusTransaksi(rowIdx: string, ws: string): Promise<Action
 export async function getRiwayatTransaksi(ws: string): Promise<RiwayatTransaksi> {
   const { supabase, user } = await requireUser();
   const wsId = await resolveWorkspaceId(supabase, user.id, ws);
-  if (!wsId) return { transaksi: [], anggaran: [], tabungan: [] };
-
-  const { data: transaksi } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('workspace_id', wsId)
-    .order('created_at', { ascending: true });
-
-  const { data: anggaran } = await supabase
-    .from('budgets')
-    .select('*')
-    .eq('workspace_id', wsId);
-
-  const { data: targets } = await supabase
-    .from('savings_targets')
-    .select('*, savings_deposits(*)')
-    .eq('workspace_id', wsId)
-    .order('created_at', { ascending: true });
-
-  const tabungan: TabunganGabungan[] = (targets || []).map((t) => ({
-    id: t.id,
-    jenis: 'Target',
-    keterangan: t.keterangan,
-    targetNominal: parseFloat(String(t.target_nominal)) || 0,
-    tenggat: t.tenggat,
-    deposits: ((t as unknown as { savings_deposits: unknown[] }).savings_deposits || []) as RiwayatTransaksi['tabungan'][number]['deposits'],
-  }));
-
-  const parsedTransaksi: Transaction[] = ((transaksi || []) as any[]).map((row) => {
-    const { catatan, sampaiTanggal } = parseCatatanRange(row.catatan || '');
-    return {
-      ...row,
-      catatan,
-      sampai_tanggal: row.sampai_tanggal || sampaiTanggal,
-    };
-  });
-
-  return {
-    transaksi: parsedTransaksi,
-    anggaran: (anggaran || []) as Budget[],
-    tabungan,
-  };
+  if (!wsId) return RIWAYAT_KOSONG;
+  return bangunRiwayat(await ambilRiwayatRaw(supabase, wsId));
 }

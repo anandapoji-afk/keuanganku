@@ -2,7 +2,8 @@
 
 import { requireUser } from '@/lib/supabase/server';
 import { hapusBuktiDariSupabaseStorage } from './upload';
-import type { ActionResult, InitWorkspaceData, KatMap } from '@/lib/types';
+import { ambilInitRaw, bangunInit, ambilRiwayatRaw, bangunRiwayat, RIWAYAT_KOSONG } from '@/lib/data/loaders';
+import type { ActionResult, InitWorkspaceData, RiwayatTransaksi } from '@/lib/types';
 
 // ============================================================
 // Padanan setupMasterWorkspace() di Kode.gs — dulu otomatis membuat
@@ -193,34 +194,69 @@ export async function getInitWorkspaceData(wsAktif?: string): Promise<InitWorksp
   const active = wsAktif && listWs.includes(wsAktif) ? wsAktif : listWs[0];
   const activeRow = (wsRows || []).find((w) => w.nama === active);
 
-  let listRek: string[] = ['CASH'];
-  const katMasuk: KatMap = {};
-  const katKeluar: KatMap = {};
+  const raw = activeRow ? await ambilInitRaw(supabase, activeRow.id) : undefined;
+  return bangunInit(listWs, active || '', raw);
+}
 
-  if (activeRow) {
-    const { data: rekRows } = await supabase
-      .from('accounts')
-      .select('nama')
-      .eq('workspace_id', activeRow.id)
+// ============================================================
+// getBootstrapData — SATU panggilan server untuk seluruh data awal aplikasi.
+// Menggantikan rantai lama (setupDefault -> ambilPreferensi -> getInit ->
+// getRiwayat) yang jalan berurutan, masing-masing dgn cek login sendiri.
+//   Ronde 1 (paralel): daftar workspace + preferensi workspace aktif
+//   Ronde 2 (paralel): rekening, kategori, transaksi, anggaran, tabungan
+// Kalau `wsPilihan` diisi (ganti workspace), preferensi ikut disimpan di
+// ronde 2 tanpa menambah waktu tunggu.
+// ============================================================
+export async function getBootstrapData(
+  wsPilihan?: string
+): Promise<{ init: InitWorkspaceData; riwayat: RiwayatTransaksi }> {
+  const { supabase, user } = await requireUser();
+
+  const ambilWorkspace = () =>
+    supabase
+      .from('workspaces')
+      .select('id, nama')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: true });
-    if (rekRows && rekRows.length > 0) listRek = rekRows.map((r) => r.nama);
 
-    const { data: katRows } = await supabase
-      .from('categories')
-      .select('id, tipe, nama, subcategories(nama)')
-      .eq('workspace_id', activeRow.id)
-      .order('created_at', { ascending: true });
+  const [wsRes, prefRes] = await Promise.all([
+    ambilWorkspace(),
+    wsPilihan
+      ? Promise.resolve(null)
+      : supabase.from('user_preferences').select('pref').eq('user_id', user.id).maybeSingle(),
+  ]);
 
-    (katRows || []).forEach((k) => {
-      const target = k.tipe === 'Pemasukan' ? katMasuk : k.tipe === 'Pengeluaran' ? katKeluar : null;
-      if (!target) return;
-      target[k.nama] = ((k as unknown as { subcategories: { nama: string }[] }).subcategories || []).map(
-        (s) => s.nama
-      );
-    });
+  let wsRows: { id: string; nama: string }[] = wsRes.data || [];
+
+  // User baru (belum punya workspace sama sekali) — jalur langka, tidak perlu dioptimasi.
+  if (wsRows.length === 0) {
+    await setupDefaultWorkspaceJikaBelumAda();
+    wsRows = (await ambilWorkspace()).data || [];
   }
 
-  return { workspaces: listWs, rekenings: listRek, active: active || '', katMasuk, katKeluar };
+  const listWs = wsRows.map((w) => w.nama);
+  const wsDiminta = wsPilihan || ((prefRes?.data?.pref as { workspace?: string } | undefined)?.workspace ?? '');
+  const active = wsDiminta && listWs.includes(wsDiminta) ? wsDiminta : listWs[0];
+  const activeRow = wsRows.find((w) => w.nama === active);
+
+  if (!activeRow) {
+    return { init: bangunInit(listWs, ''), riwayat: RIWAYAT_KOSONG };
+  }
+
+  const [initRaw, riwayatRaw] = await Promise.all([
+    ambilInitRaw(supabase, activeRow.id),
+    ambilRiwayatRaw(supabase, activeRow.id),
+    wsPilihan
+      ? supabase
+          .from('user_preferences')
+          .upsert(
+            { user_id: user.id, pref: { workspace: active }, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id' }
+          )
+      : Promise.resolve(null),
+  ]);
+
+  return { init: bangunInit(listWs, active, initRaw), riwayat: bangunRiwayat(riwayatRaw) };
 }
 
 // Padanan simpanPreferensiUser(pref) / ambilPreferensiUser()
