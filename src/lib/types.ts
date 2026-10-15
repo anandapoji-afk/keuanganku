@@ -24,6 +24,19 @@ export interface LaporanFilterOptions {
   tahun?: string;
 }
 
+export interface TransaksiFilterState {
+  search: string;
+  warna: WarnaHighlight | 'Semua';
+  tipe: Tipe | 'Semua';
+  rekening: string;
+  kategori: string;
+  tanggal: string;
+  bulan: string;
+  tahun: string;
+  startDate: string;
+  endDate: string;
+}
+
 export interface Workspace {
   id: string;
   user_id: string;
@@ -295,12 +308,15 @@ export type ActionResult<T = undefined> =
 // ============================================================
 
 export interface RiwayatBayar {
+  id?: string;
   tglTampil: string;
   nominal: number;
   rekening: string;
+  keterangan?: string;
 }
 
 export interface HutangDPItem {
+  id?: string;
   piutangId: string;
   keterangan: string;
   tipe: Tipe;
@@ -310,11 +326,13 @@ export interface HutangDPItem {
   totalTagihan: number;
   totalDibayar: number;
   sisa: number;
-  status: 'DP' | 'Sebagian Dibayar' | 'Lunas';
+  status: 'DP' | 'Sebagian Dibayar' | 'Lunas' | 'Terlambat';
+  persentase?: number;
   riwayat: RiwayatBayar[];
 }
 
 export interface HutangPiutangItem {
+  id?: string;
   hpId: string;
   tipe: 'Hutang' | 'Piutang';
   pihak: string;
@@ -322,9 +340,11 @@ export interface HutangPiutangItem {
   tglSort: string;
   tglTampil: string;
   jatuhTempo: string;
+  jatuhTempoRaw?: string;
   nominalPokok: number;
   totalDibayar: number;
   sisa: number;
-  status: 'Berjalan' | 'Lunas';
+  status: 'Berjalan' | 'Lunas' | 'Terlambat';
+  persentase?: number;
   riwayat: RiwayatBayar[];
 }

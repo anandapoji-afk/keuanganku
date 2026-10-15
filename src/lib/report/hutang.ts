@@ -27,21 +27,32 @@ export function hitungDaftarHutangDariGrid(
   });
 
   const list: HutangDPItem[] = [];
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   Object.keys(masterById).forEach((pid) => {
     const m = masterById[pid];
     const tglMaster = new Date(m.tanggal);
     if (sDate && tglMaster < sDate) return;
     if (eDate && tglMaster > eDate) return;
-    if (filter && !matchesTransaksiFilter(m, filter)) return;
 
     const rows = (byId[pid] || []).slice().sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+
+    if (filter) {
+      const masterCocok = matchesTransaksiFilter(m, filter);
+      const cicilanCocok = rows.some((r) => matchesTransaksiFilter(r, filter));
+      if (!masterCocok && !cicilanCocok) return;
+    }
+
     const totalDibayar = rows.reduce((a, r) => a + (parseFloat(String(r.nominal)) || 0), 0);
     const totalTagihan = parseFloat(String(m.total_tagihan)) || 0;
     const sisa = Math.max(totalTagihan - totalDibayar, 0);
+    const persentase = totalTagihan > 0 ? Math.min(Math.round((totalDibayar / totalTagihan) * 100), 100) : 100;
+    const isTerlambat = sisa > 0 && Boolean((m.jatuh_tempo && m.jatuh_tempo < todayIso) || (m.sampai_tanggal && m.sampai_tanggal < todayIso));
     const status: HutangDPItem['status'] =
-      sisa <= 0 ? 'Lunas' : totalDibayar > (parseFloat(String(m.nominal)) || 0) ? 'Sebagian Dibayar' : 'DP';
+      sisa <= 0 ? 'Lunas' : isTerlambat ? 'Terlambat' : totalDibayar > (parseFloat(String(m.nominal)) || 0) ? 'Sebagian Dibayar' : 'DP';
 
     list.push({
+      id: m.id,
       piutangId: pid,
       keterangan: m.keterangan || '-',
       tipe: m.tipe,
@@ -51,11 +62,14 @@ export function hitungDaftarHutangDariGrid(
       totalTagihan,
       totalDibayar,
       sisa,
+      persentase,
       status,
       riwayat: rows.map((r) => ({
+        id: r.id,
         tglTampil: formatTanggalIndo(r.tanggal),
         nominal: parseFloat(String(r.nominal)) || 0,
         rekening: r.rekening || 'CASH',
+        keterangan: r.keterangan || '',
       })),
     });
   });
@@ -84,23 +98,33 @@ export function hitungDaftarHutangPiutangDariGrid(
   });
 
   const list: HutangPiutangItem[] = [];
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   Object.keys(pokokById).forEach((hpId) => {
     const p = pokokById[hpId];
     const tglPokok = new Date(p.tanggal);
     if (sDate && tglPokok < sDate) return;
     if (eDate && tglPokok > eDate) return;
-    if (filter && !matchesTransaksiFilter(p, filter)) return;
 
     const rows = (byId[hpId] || [])
       .filter((r) => r.peranan_hp === 'Pembayaran')
       .sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
 
+    if (filter) {
+      const pokokCocok = matchesTransaksiFilter(p, filter);
+      const bayarCocok = rows.some((r) => matchesTransaksiFilter(r, filter));
+      if (!pokokCocok && !bayarCocok) return;
+    }
+
     const totalDibayar = rows.reduce((a, r) => a + (parseFloat(String(r.nominal)) || 0), 0);
     const nominalPokok = parseFloat(String(p.nominal)) || 0;
     const sisa = Math.max(nominalPokok - totalDibayar, 0);
-    const status: HutangPiutangItem['status'] = sisa <= 0 ? 'Lunas' : 'Berjalan';
+    const persentase = nominalPokok > 0 ? Math.min(Math.round((totalDibayar / nominalPokok) * 100), 100) : 100;
+    const isTerlambat = sisa > 0 && Boolean(p.jatuh_tempo && p.jatuh_tempo < todayIso);
+    const status: HutangPiutangItem['status'] = sisa <= 0 ? 'Lunas' : isTerlambat ? 'Terlambat' : 'Berjalan';
 
     list.push({
+      id: p.id,
       hpId,
       tipe: p.kategori as 'Hutang' | 'Piutang',
       pihak: p.pihak_terkait || '-',
@@ -108,14 +132,18 @@ export function hitungDaftarHutangPiutangDariGrid(
       tglSort: tglPokok.toISOString(),
       tglTampil: formatTanggalIndo(p.tanggal),
       jatuhTempo: p.jatuh_tempo ? formatTanggalIndo(p.jatuh_tempo) : '',
+      jatuhTempoRaw: p.jatuh_tempo || undefined,
       nominalPokok,
       totalDibayar,
       sisa,
+      persentase,
       status,
       riwayat: rows.map((r) => ({
+        id: r.id,
         tglTampil: formatTanggalIndo(r.tanggal),
         nominal: parseFloat(String(r.nominal)) || 0,
         rekening: r.rekening || 'CASH',
+        keterangan: r.keterangan || '',
       })),
     });
   });

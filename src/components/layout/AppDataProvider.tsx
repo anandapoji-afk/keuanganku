@@ -3,20 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getBootstrapData } from '@/lib/actions/workspace';
 import { getRiwayatTransaksi } from '@/lib/actions/transaksi';
-import type { InitWorkspaceData, Transaction, Budget, TabunganGabungan, Tipe, WarnaHighlight } from '@/lib/types';
+import type { InitWorkspaceData, Transaction, Budget, TabunganGabungan, TransaksiFilterState } from '@/lib/types';
 
-export type TransaksiFilterState = {
-  search: string;
-  warna: 'Semua' | WarnaHighlight;
-  tipe: 'Semua' | Tipe;
-  rekening: string;
-  kategori: string;
-  tanggal: string;
-  bulan: string;
-  tahun: string;
-  startDate: string;
-  endDate: string;
-};
+export type { TransaksiFilterState };
 
 interface AppDataState {
   loading: boolean;
@@ -34,7 +23,12 @@ interface AppDataState {
 }
 
 const kosong: InitWorkspaceData = { workspaces: [], rekenings: ['CASH'], active: '', katMasuk: {}, katKeluar: {} };
-const FILTER_KOSONG: TransaksiFilterState = {
+export function getBulanIniIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export const FILTER_KOSONG: TransaksiFilterState = {
   search: '',
   warna: 'Semua',
   tipe: 'Semua',
@@ -46,6 +40,13 @@ const FILTER_KOSONG: TransaksiFilterState = {
   startDate: '',
   endDate: '',
 };
+
+export function getDefaultFilter(): TransaksiFilterState {
+  return {
+    ...FILTER_KOSONG,
+    bulan: getBulanIniIso(),
+  };
+}
 
 function normalizeText(value: string): string {
   return value.trim().toLowerCase();
@@ -167,7 +168,7 @@ export default function AppDataProvider({ children }: { children: React.ReactNod
   const [transaksi, setTransaksi] = useState<Transaction[]>([]);
   const [anggaran, setAnggaran] = useState<Budget[]>([]);
   const [tabungan, setTabungan] = useState<TabunganGabungan[]>([]);
-  const [filter, setFilter] = useState<TransaksiFilterState>(FILTER_KOSONG);
+  const [filter, setFilter] = useState<TransaksiFilterState>(getDefaultFilter);
 
   const filteredTransaksi = useMemo(() => {
     return transaksi
@@ -176,7 +177,7 @@ export default function AppDataProvider({ children }: { children: React.ReactNod
       .sort(bandingkanTransaksiBaruKeLama);
   }, [filter, transaksi]);
 
-  const clearFilter = useCallback(() => setFilter(FILTER_KOSONG), []);
+  const clearFilter = useCallback(() => setFilter(getDefaultFilter()), []);
 
   const refetchRiwayat = useCallback(async (ws?: string) => {
     const target = ws || init.active;
