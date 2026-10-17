@@ -466,6 +466,28 @@ export default function TransaksiPage() {
     setModalOpen(true);
   }
 
+  // Buka modal saat dipanggil dari tombol center "+ Transaksi" di BottomNav
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get('tambah') === '1' || sp.get('baru') === '1') {
+        bukaTambah();
+        // Bersihkan query param agar URL tetap rapi
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+
+    const handleBukaTambahEvent = () => {
+      bukaTambah();
+    };
+
+    window.addEventListener('buka-tambah-transaksi', handleBukaTambahEvent);
+    return () => {
+      window.removeEventListener('buka-tambah-transaksi', handleBukaTambahEvent);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [init.rekenings]);
+
   function bukaEdit(t: Transaction) {
     setEditId(t.id);
     setForm({

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -47,9 +47,21 @@ export const ALL_MENU: MenuItem[] = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const navRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const handleTambahTransaksi = () => {
+    if (pathname === '/transaksi') {
+      window.dispatchEvent(new CustomEvent('buka-tambah-transaksi'));
+    } else {
+      router.push('/transaksi?tambah=1');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('buka-tambah-transaksi'));
+      }, 350);
+    }
+  };
 
   // Check scroll position to display edge fade indicators
   const checkScroll = () => {
@@ -123,64 +135,97 @@ export function BottomNav() {
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <div className="flex items-center gap-1.5 mx-auto">
-        {ALL_MENU.map((m) => {
+        {ALL_MENU.map((m, index) => {
           const active = pathname?.startsWith(m.href);
           const Icon = m.icon;
 
           return (
-            <Link
-              key={m.href}
-              href={m.href}
-              data-active={active ? 'true' : 'false'}
-              className="relative flex-shrink-0 flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded-xl select-none group snap-center"
-            >
-              <motion.div
-                whileTap={{ scale: 0.88 }}
-                whileHover={{ scale: 1.05 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                className="flex flex-col items-center gap-1 w-full"
+            <Fragment key={m.href}>
+              {/* Tombol Tambah Transaksi di Center Menu (tepat di tengah antara 4 item kiri dan 4 item kanan) */}
+              {index === 4 && (
+                <button
+                  type="button"
+                  onClick={handleTambahTransaksi}
+                  title="Tambah Transaksi Baru"
+                  aria-label="Tambah Transaksi Baru"
+                  className="relative flex-shrink-0 flex flex-col items-center justify-center min-w-[64px] px-1 py-1 rounded-xl select-none group snap-center focus:outline-none"
+                >
+                  <motion.div
+                    whileTap={{ scale: 0.88 }}
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                    className="flex flex-col items-center gap-1 w-full"
+                  >
+                    {/* Icon Container Menonjol (Gradient Center Button) */}
+                    <div className="w-9 h-8 flex items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 via-sky-500 to-cyan-500 text-white shadow-sm shadow-sky-500/30 border border-sky-400/50 group-hover:shadow-md group-hover:shadow-sky-500/40 group-hover:from-sky-500 group-hover:to-cyan-400 transition-all">
+                      <Plus
+                        size={20}
+                        strokeWidth={2.75}
+                        className="transition-transform duration-200 group-hover:rotate-90 group-active:scale-90"
+                      />
+                    </div>
+
+                    {/* Label */}
+                    <span className="text-[10px] tracking-tight leading-none text-center transition-colors font-bold text-sky-700 group-hover:text-sky-800 truncate max-w-[66px]">
+                      + Transaksi
+                    </span>
+                  </motion.div>
+                </button>
+              )}
+
+              <Link
+                href={m.href}
+                data-active={active ? 'true' : 'false'}
+                className="relative flex-shrink-0 flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded-xl select-none group snap-center"
               >
-                {/* Active Background Pill Highlight */}
-                {active && (
-                  <motion.span
-                    layoutId="activeBottomTab"
-                    className="absolute inset-0 bg-sky-50 border border-sky-100/80 rounded-xl -z-10 shadow-sm"
-                    transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                  />
-                )}
-
-                {/* Flat Modern Icon Container */}
-                <div
-                  className={`w-9 h-8 flex items-center justify-center rounded-lg transition-colors ${
-                    active ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'
-                  }`}
+                <motion.div
+                  whileTap={{ scale: 0.88 }}
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  className="flex flex-col items-center gap-1 w-full"
                 >
-                  <Icon
-                    size={20}
-                    strokeWidth={active ? 2.2 : 1.75}
-                    className="transition-transform duration-150 group-active:scale-90"
-                  />
-                </div>
+                  {/* Active Background Pill Highlight */}
+                  {active && (
+                    <motion.span
+                      layoutId="activeBottomTab"
+                      className="absolute inset-0 bg-sky-50 border border-sky-100/80 rounded-xl -z-10 shadow-sm"
+                      transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+                    />
+                  )}
 
-                {/* Label */}
-                <span
-                  className={`text-[10px] tracking-tight leading-none text-center transition-colors truncate max-w-[66px] ${
-                    active ? 'font-bold text-sky-700' : 'font-medium text-slate-500 group-hover:text-slate-700'
-                  }`}
-                >
-                  {m.shortLabel || m.label}
-                </span>
+                  {/* Flat Modern Icon Container */}
+                  <div
+                    className={`w-9 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                      active ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'
+                    }`}
+                  >
+                    <Icon
+                      size={20}
+                      strokeWidth={active ? 2.2 : 1.75}
+                      className="transition-transform duration-150 group-active:scale-90"
+                    />
+                  </div>
 
-                {/* Active Underline Dot */}
-                {active && (
-                  <motion.span
-                    layoutId="activeBottomDot"
-                    className="w-1 h-1 rounded-full bg-sky-600 mt-0.5"
-                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                  />
-                )}
-              </motion.div>
-            </Link>
+                  {/* Label */}
+                  <span
+                    className={`text-[10px] tracking-tight leading-none text-center transition-colors truncate max-w-[66px] ${
+                      active ? 'font-bold text-sky-700' : 'font-medium text-slate-500 group-hover:text-slate-700'
+                    }`}
+                  >
+                    {m.shortLabel || m.label}
+                  </span>
+
+                  {/* Active Underline Dot */}
+                  {active && (
+                    <motion.span
+                      layoutId="activeBottomDot"
+                      className="w-1 h-1 rounded-full bg-sky-600 mt-0.5"
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  )}
+                </motion.div>
+              </Link>
+            </Fragment>
           );
         })}
         </div>
