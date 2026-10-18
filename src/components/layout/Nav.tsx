@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useRef, useEffect, Fragment } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -127,6 +127,31 @@ export function BottomNav() {
         </div>
       )}
 
+      {/* Tombol + Transaksi Selalu di Tengah & Melayang di Atas Footer (Tidak Menimpa Menu Icon Lain) */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 pointer-events-auto z-50">
+        <motion.button
+          type="button"
+          onClick={handleTambahTransaksi}
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.94 }}
+          transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+          title="Tambah Transaksi Baru"
+          aria-label="Tambah Transaksi Baru"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-sky-600 via-sky-500 to-cyan-500 text-white shadow-[0_6px_20px_-2px_rgba(14,165,233,0.45)] hover:shadow-[0_8px_25px_-2px_rgba(14,165,233,0.55)] border border-sky-400/40 active:scale-95 transition-all select-none group focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 backdrop-blur-sm"
+        >
+          <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+            <Plus
+              size={14}
+              strokeWidth={3}
+              className="transition-transform duration-200 group-hover:rotate-90 group-active:scale-90"
+            />
+          </div>
+          <span className="text-xs font-bold tracking-tight text-white whitespace-nowrap drop-shadow-sm">
+            + Transaksi
+          </span>
+        </motion.button>
+      </div>
+
       {/* Horizontal Scrollable Menu Track */}
       <div
         ref={navRef}
@@ -135,97 +160,64 @@ export function BottomNav() {
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <div className="flex items-center gap-1.5 mx-auto">
-        {ALL_MENU.map((m, index) => {
+        {ALL_MENU.map((m) => {
           const active = pathname?.startsWith(m.href);
           const Icon = m.icon;
 
           return (
-            <Fragment key={m.href}>
-              {/* Tombol Tambah Transaksi di Center Menu (tepat di tengah antara 4 item kiri dan 4 item kanan) */}
-              {index === 4 && (
-                <button
-                  type="button"
-                  onClick={handleTambahTransaksi}
-                  title="Tambah Transaksi Baru"
-                  aria-label="Tambah Transaksi Baru"
-                  className="relative flex-shrink-0 flex flex-col items-center justify-center min-w-[64px] px-1 py-1 rounded-xl select-none group snap-center focus:outline-none"
-                >
-                  <motion.div
-                    whileTap={{ scale: 0.88 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                    className="flex flex-col items-center gap-1 w-full"
-                  >
-                    {/* Icon Container Menonjol (Gradient Center Button) */}
-                    <div className="w-9 h-8 flex items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 via-sky-500 to-cyan-500 text-white shadow-sm shadow-sky-500/30 border border-sky-400/50 group-hover:shadow-md group-hover:shadow-sky-500/40 group-hover:from-sky-500 group-hover:to-cyan-400 transition-all">
-                      <Plus
-                        size={20}
-                        strokeWidth={2.75}
-                        className="transition-transform duration-200 group-hover:rotate-90 group-active:scale-90"
-                      />
-                    </div>
-
-                    {/* Label */}
-                    <span className="text-[10px] tracking-tight leading-none text-center transition-colors font-bold text-sky-700 group-hover:text-sky-800 truncate max-w-[66px]">
-                      + Transaksi
-                    </span>
-                  </motion.div>
-                </button>
-              )}
-
-              <Link
-                href={m.href}
-                data-active={active ? 'true' : 'false'}
-                className="relative flex-shrink-0 flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded-xl select-none group snap-center"
+            <Link
+              key={m.href}
+              href={m.href}
+              data-active={active ? 'true' : 'false'}
+              className="relative flex-shrink-0 flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded-xl select-none group snap-center"
+            >
+              <motion.div
+                whileTap={{ scale: 0.88 }}
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                className="flex flex-col items-center gap-1 w-full"
               >
-                <motion.div
-                  whileTap={{ scale: 0.88 }}
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                  className="flex flex-col items-center gap-1 w-full"
+                {/* Active Background Pill Highlight */}
+                {active && (
+                  <motion.span
+                    layoutId="activeBottomTab"
+                    className="absolute inset-0 bg-sky-50 border border-sky-100/80 rounded-xl -z-10 shadow-sm"
+                    transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+                  />
+                )}
+
+                {/* Flat Modern Icon Container */}
+                <div
+                  className={`w-9 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                    active ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'
+                  }`}
                 >
-                  {/* Active Background Pill Highlight */}
-                  {active && (
-                    <motion.span
-                      layoutId="activeBottomTab"
-                      className="absolute inset-0 bg-sky-50 border border-sky-100/80 rounded-xl -z-10 shadow-sm"
-                      transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                    />
-                  )}
+                  <Icon
+                    size={20}
+                    strokeWidth={active ? 2.2 : 1.75}
+                    className="transition-transform duration-150 group-active:scale-90"
+                  />
+                </div>
 
-                  {/* Flat Modern Icon Container */}
-                  <div
-                    className={`w-9 h-8 flex items-center justify-center rounded-lg transition-colors ${
-                      active ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'
-                    }`}
-                  >
-                    <Icon
-                      size={20}
-                      strokeWidth={active ? 2.2 : 1.75}
-                      className="transition-transform duration-150 group-active:scale-90"
-                    />
-                  </div>
+                {/* Label */}
+                <span
+                  className={`text-[10px] tracking-tight leading-none text-center transition-colors truncate max-w-[66px] ${
+                    active ? 'font-bold text-sky-700' : 'font-medium text-slate-500 group-hover:text-slate-700'
+                  }`}
+                >
+                  {m.shortLabel || m.label}
+                </span>
 
-                  {/* Label */}
-                  <span
-                    className={`text-[10px] tracking-tight leading-none text-center transition-colors truncate max-w-[66px] ${
-                      active ? 'font-bold text-sky-700' : 'font-medium text-slate-500 group-hover:text-slate-700'
-                    }`}
-                  >
-                    {m.shortLabel || m.label}
-                  </span>
-
-                  {/* Active Underline Dot */}
-                  {active && (
-                    <motion.span
-                      layoutId="activeBottomDot"
-                      className="w-1 h-1 rounded-full bg-sky-600 mt-0.5"
-                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                    />
-                  )}
-                </motion.div>
-              </Link>
-            </Fragment>
+                {/* Active Underline Dot */}
+                {active && (
+                  <motion.span
+                    layoutId="activeBottomDot"
+                    className="w-1 h-1 rounded-full bg-sky-600 mt-0.5"
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                )}
+              </motion.div>
+            </Link>
           );
         })}
         </div>

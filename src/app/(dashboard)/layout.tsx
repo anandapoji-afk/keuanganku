@@ -6,7 +6,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <AppDataProvider>
       <TopBar />
-      <main className="max-w-3xl mx-auto px-4 py-4 pb-28">
+      <main className="max-w-3xl mx-auto px-4 py-4 pb-32">
         <PageTransition>{children}</PageTransition>
       </main>
       <BottomNav />
