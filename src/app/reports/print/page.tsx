@@ -68,7 +68,7 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
       <>
         {grup.map((g) => (
           <div key={g.kategori} className="mb-3 avoid-break">
-            <div className={`flex justify-between items-center px-3 py-1.5 rounded border-l-4 font-semibold text-sm ${bgHeader}`}>
+            <div className={`grp-head flex justify-between items-center px-3 py-1.5 rounded border-l-4 font-semibold text-sm ${bgHeader}`}>
               <span>{g.kategori}</span>
               <span>{rp(g.subtotal)}</span>
             </div>
@@ -137,14 +137,16 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
     <div className="report-root bg-slate-100 min-h-screen py-6 print:bg-white print:py-0">
       <TombolCetak />
       <style>{`
-        @page { size: A4; margin: 14mm 12mm; }
-        .report-page { width: 210mm; min-height: 297mm; margin: 0 auto 12px; background: #fff; padding: 14mm 12mm; box-shadow: 0 0 8px rgba(0,0,0,.08); }
+        @page { size: A4; margin: 12mm 12mm 14mm 12mm; @bottom-right { content: "Halaman " counter(page) " dari " counter(pages); font-size: 8pt; color: #94a3b8; } }
+        .report-page { width: 210mm; min-height: 297mm; margin: 0 auto 12px; background: #fff; padding: 12mm 12mm 14mm; box-shadow: 0 0 8px rgba(0,0,0,.08); box-sizing: border-box; }
         @media print {
           .no-print { display: none !important; }
-          .report-page { box-shadow: none; margin: 0; width: auto; min-height: 0; }
+          .report-page { box-shadow: none; margin: 0; width: auto; min-height: 0; padding: 0 !important; }
           .avoid-break { break-inside: avoid; page-break-inside: avoid; }
           .page-break-before { break-before: page; page-break-before: always; }
           .page-break-after { break-after: page; page-break-after: always; }
+          .page-gap { height: 0 !important; margin: 0 !important; overflow: hidden; break-after: page; page-break-after: always; }
+          .page-gap > * { display: none !important; }
         }
         .sect-title { border-left: 4px solid #0ea5e9; padding-left: 8px; font-weight: 700; font-size: 13px; margin: 18px 0 8px; }
         table.data { border-collapse: collapse; }
@@ -156,8 +158,8 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
         .lampiran-item { margin-bottom: 14px; page-break-inside: avoid; min-height: 360px; }
       `}</style>
 
-      <div className="report-page">
-        <div className="flex justify-between items-start border-b-2 border-slate-800 pb-3 mb-4">
+      <div className="report-page" data-paginate="1">
+        <div className="page-head avoid-break flex justify-between items-start border-b-2 border-slate-800 pb-3 mb-4">
           <div>
             <div className="text-lg font-bold">LAPORAN KEUANGAN{jenis === 'detail' ? ' DETAIL TRANSAKSI' : ''}</div>
             <div className="text-xs text-slate-500 mt-1">Akun: <strong>{data.ws}</strong></div>
@@ -179,14 +181,14 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
 
         <div className="sect-title" style={{ borderLeftColor: '#10b981' }}>Pemasukan</div>
         <RenderGrup grup={data.pemasukan.grup} warna="in" />
-        <div className="flex justify-between font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded mt-2 text-sm">
+        <div className="total-row flex justify-between font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded mt-2 text-sm">
           <span>TOTAL PEMASUKAN</span>
           <span>{rp(data.pemasukan.total)}</span>
         </div>
 
         <div className="sect-title" style={{ borderLeftColor: '#ef4444' }}>Pengeluaran</div>
         <RenderGrup grup={data.pengeluaran.grup} warna="out" />
-        <div className="flex justify-between font-bold text-red-700 bg-red-50 px-3 py-2 rounded mt-2 text-sm">
+        <div className="total-row flex justify-between font-bold text-red-700 bg-red-50 px-3 py-2 rounded mt-2 text-sm">
           <span>TOTAL PENGELUARAN</span>
           <span>{rp(data.pengeluaran.total)}</span>
         </div>
@@ -232,7 +234,7 @@ export default async function HalamanCetakLaporan({ searchParams }: Props) {
           <span>{rp(data.saldoBersih)}</span>
         </div>
 
-        <div className="flex justify-between text-[9px] text-slate-400 border-t border-slate-200 mt-4 pt-2">
+        <div className="page-foot flex justify-between text-[9px] text-slate-400 border-t border-slate-200 mt-4 pt-2">
           <span>Dicetak otomatis oleh KeuanganKu</span>
           <span>Dibuat {data.dicetakPada}</span>
         </div>
