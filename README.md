@@ -71,6 +71,13 @@ cp .env.local.example .env.local
 # isi NEXT_PUBLIC_SUPABASE_URL & NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
+### 2b. Input AI (Gemini) — suara & foto nota
+Isi `GEMINI_API_KEY` di `.env.local` (dan di Environment Variables Vercel). Key dibuat di
+https://aistudio.google.com/apikey. **Jangan** pakai prefix `NEXT_PUBLIC_`, supaya key tetap
+di server. Model default `gemini-3.5-flash`, bisa diganti lewat `GEMINI_MODEL`.
+Tombol ada di modal "Tambah Transaksi": hasil AI hanya mengisi form, tetap harus disimpan manual.
+Kode: `src/lib/actions/gemini.ts`, `src/components/transaksi/AiInput.tsx`, `src/lib/ai/media.ts`.
+
 ### 3. Install & jalankan
 ```bash
 npm install

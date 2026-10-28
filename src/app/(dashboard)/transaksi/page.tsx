@@ -40,70 +40,11 @@ import {
 import JSZip from 'jszip';
 import { useAppData } from '@/components/layout/AppDataProvider';
 import Modal from '@/components/ui/Modal';
+import AiInput from '@/components/transaksi/AiInput';
+import { fileToBase64 } from '@/lib/ai/media';
 import { rp, DAFTAR_WARNA_HIGHLIGHT, warnaHighlightHex, formatBulanIndo } from '@/lib/utils';
 import { simpanTransaksi, hapusTransaksi, simpanHighlightCatatan } from '@/lib/actions/transaksi';
-import type { SimpanTransaksiPayload, Transaction, Tipe, StatusBayar, WarnaHighlight } from '@/lib/types';
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-      return;
-    }
-
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const MAX_WIDTH = 1280;
-      const MAX_HEIGHT = 1280;
-      let width = img.width;
-      let height = img.height;
-
-      if (width > height) {
-        if (width > MAX_WIDTH) {
-          height = Math.round((height * MAX_WIDTH) / width);
-          width = MAX_WIDTH;
-        }
-      } else {
-        if (height > MAX_HEIGHT) {
-          width = Math.round((width * MAX_HEIGHT) / height);
-          height = MAX_HEIGHT;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Gagal memuat canvas context'));
-        return;
-      }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-      const quality = 0.8;
-      const dataUrl = canvas.toDataURL(mimeType, quality);
-      resolve(dataUrl.split(',')[1]);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    };
-
-    img.src = objectUrl;
-  });
-}
+import type { SimpanTransaksiPayload, Transaction, Tipe, StatusBayar, WarnaHighlight, HasilEkstrakAi } from '@/lib/types';
 
 const FORM_KOSONG = {
   tanggal: new Date().toISOString().slice(0, 10),
@@ -487,6 +428,26 @@ export default function TransaksiPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [init.rekenings]);
+
+  // Isi form dari hasil Gemini. Kategori/sub/rekening hanya dipakai kalau persis ada di daftar user.
+  function terapkanHasilAi(h: HasilEkstrakAi) {
+    const map = h.tipe === 'Pemasukan' ? init.katMasuk : init.katKeluar;
+    const kategori = Object.keys(map).includes(h.kategori) ? h.kategori : '';
+    const subKategori = kategori && (map[kategori] || []).includes(h.subKategori) ? h.subKategori : '';
+    setForm((f) => ({
+      ...f,
+      tipe: h.tipe,
+      tanggal: /^\d{4}-\d{2}-\d{2}$/.test(h.tanggal) ? h.tanggal : f.tanggal,
+      jam: /^\d{2}:\d{2}$/.test(h.jam) ? h.jam : f.jam,
+      kategori,
+      subKategori,
+      keterangan: h.keterangan || f.keterangan,
+      nominal: h.nominal > 0 ? String(Math.round(h.nominal)) : f.nominal,
+      rekening: init.rekenings.includes(h.rekening) ? h.rekening : f.rekening,
+      pihakTerkait: h.pihakTerkait || f.pihakTerkait,
+      catatan: h.catatan || f.catatan,
+    }));
+  }
 
   function bukaEdit(t: Transaction) {
     setEditId(t.id);
@@ -1463,6 +1424,16 @@ export default function TransaksiPage() {
       {/* Modal Tambah / Edit Transaksi */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Transaksi' : 'Tambah Transaksi Baru'}>
         <div className="space-y-3.5">
+          {!editId && (
+            <AiInput
+              katMasuk={init.katMasuk}
+              katKeluar={init.katKeluar}
+              rekenings={init.rekenings}
+              onHasil={terapkanHasilAi}
+              onFoto={(files) => setFileBaru((prev) => [...prev, ...files])}
+            />
+          )}
+
           {/* Tipe Selector Switch */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/80">
             {(['Pengeluaran', 'Pemasukan'] as const).map((tp) => (

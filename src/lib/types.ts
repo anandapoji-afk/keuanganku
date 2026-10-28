@@ -190,6 +190,29 @@ export interface SimpanTransaksiPayload {
   buktiBaru?: { data: string; mime: string; nama: string }[]; // file base64 baru
 }
 
+// Input AI (Gemini): suara atau foto nota/invoice/bukti potong -> isian form transaksi.
+export interface EkstrakAiPayload {
+  files: { data: string; mime: string }[]; // base64; audio/wav atau image/*
+  hariIni: string; // yyyy-MM-dd, tanggal lokal user (utk "kemarin", dst)
+  katMasuk: KatMap;
+  katKeluar: KatMap;
+  rekenings: string[];
+}
+
+export interface HasilEkstrakAi {
+  ditemukan: boolean;
+  tipe: Tipe;
+  tanggal: string;
+  jam: string;
+  kategori: string;
+  subKategori: string;
+  rekening: string;
+  keterangan: string;
+  pihakTerkait: string;
+  nominal: number;
+  catatan: string;
+}
+
 export interface SimpanAnggaranPayload {
   workspace: string;
   bulanTahun: string; // format "YYYY-M" (dari input type=month)
