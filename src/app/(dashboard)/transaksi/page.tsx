@@ -1105,7 +1105,7 @@ export default function TransaksiPage() {
         )}
 
         {/* Baris 3: Segment Tipe, Filter Dropdowns & Tombol Urutkan */}
-        <div className="space-y-2.5 pt-2 border-t border-slate-100">
+        <div className="relative space-y-2.5 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             {/* Segment Tipe */}
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/70 shrink-0">
@@ -2039,7 +2039,7 @@ function SortMenu({ aturan, onTerapkan }: { aturan: AturanSort[]; onTerapkan: (a
   const berubah = JSON.stringify(draft) !== JSON.stringify(aturan);
 
   return (
-    <div className="relative" ref={wadah}>
+    <div className="sm:relative" ref={wadah}>
       <button
         type="button"
         onClick={toggle}
@@ -2061,7 +2061,7 @@ function SortMenu({ aturan, onTerapkan }: { aturan: AturanSort[]; onTerapkan: (a
       </button>
 
       {terbuka && (
-        <div className="absolute right-0 top-full mt-2 z-30 w-[19rem] max-w-[calc(100vw-2rem)] bg-white rounded-2xl border border-slate-200 shadow-xl p-4">
+        <div className="absolute inset-x-0 mt-2 z-30 sm:inset-x-auto sm:right-0 sm:top-full sm:w-[19rem] bg-white rounded-2xl border border-slate-200 shadow-xl p-4">
           {draft.length === 0 ? (
             <div className="mb-3">
               <div className="text-sm font-bold text-slate-800">Belum ada aturan pengurutan</div>
